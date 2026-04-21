@@ -1,0 +1,183 @@
+{
+  "name": "Avaria",
+  "type": "object",
+  "properties": {
+    "equipamento_id": {
+      "type": "string"
+    },
+    "equipamento_info": {
+      "type": "string",
+      "description": "Info do equipamento (cache)"
+    },
+    "origem": {
+      "type": "string",
+      "enum": [
+        "DEVOLU\u00c7\u00c3O",
+        "DIRETA"
+      ]
+    },
+    "devolucao_id": {
+      "type": "string"
+    },
+    "estado": {
+      "type": "string",
+      "enum": [
+        "A REVER",
+        "DIAGNOSTICADO",
+        "EM REPARA\u00c7\u00c3O",
+        "AGUARDA PE\u00c7AS",
+        "ARRANJADO",
+        "INUTILIZADO"
+      ],
+      "default": "A REVER"
+    },
+    "diagnostico": {
+      "type": "string"
+    },
+    "resolucao": {
+      "type": "string"
+    },
+    "equipamento_com_problemas": {
+      "type": "boolean",
+      "default": false,
+      "description": "Equipamento entregue com problemas (para atualizar o estado do empr\u00e9stimo)"
+    },
+    "data_resolucao": {
+      "type": "string",
+      "format": "date"
+    },
+    "componentes": {
+      "type": "object",
+      "properties": {
+        "ecra": {
+          "type": "string",
+          "enum": [
+            "OK",
+            "AVARIADO",
+            "DESCONHECIDO"
+          ],
+          "default": "DESCONHECIDO"
+        },
+        "disco": {
+          "type": "string",
+          "enum": [
+            "OK",
+            "AVARIADO",
+            "DESCONHECIDO"
+          ],
+          "default": "DESCONHECIDO"
+        },
+        "ram": {
+          "type": "string",
+          "enum": [
+            "OK",
+            "AVARIADO",
+            "DESCONHECIDO"
+          ],
+          "default": "DESCONHECIDO"
+        },
+        "board": {
+          "type": "string",
+          "enum": [
+            "OK",
+            "AVARIADO",
+            "DESCONHECIDO"
+          ],
+          "default": "DESCONHECIDO"
+        },
+        "bateria": {
+          "type": "string",
+          "enum": [
+            "OK",
+            "AVARIADO",
+            "DESCONHECIDO"
+          ],
+          "default": "DESCONHECIDO"
+        },
+        "teclado": {
+          "type": "string",
+          "enum": [
+            "OK",
+            "AVARIADO",
+            "DESCONHECIDO"
+          ],
+          "default": "DESCONHECIDO"
+        },
+        "touchpad": {
+          "type": "string",
+          "enum": [
+            "OK",
+            "AVARIADO",
+            "DESCONHECIDO"
+          ],
+          "default": "DESCONHECIDO"
+        }
+      }
+    },
+    "historico_estados": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "tipo": {
+            "type": "string"
+          },
+          "estado_anterior": {
+            "type": "string"
+          },
+          "estado_novo": {
+            "type": "string"
+          },
+          "campo": {
+            "type": "string"
+          },
+          "valor_anterior": {
+            "type": "string"
+          },
+          "valor_novo": {
+            "type": "string"
+          },
+          "data": {
+            "type": "string"
+          },
+          "utilizador": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "documentos": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "nome": {
+            "type": "string"
+          },
+          "tipo": {
+            "type": "string"
+          },
+          "data_upload": {
+            "type": "string"
+          },
+          "ativo": {
+            "type": "boolean"
+          },
+          "eliminado_por": {
+            "type": "string"
+          },
+          "data_eliminacao": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "equipamento_id",
+    "origem"
+  ]
+}

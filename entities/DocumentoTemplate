@@ -1,0 +1,33 @@
+{
+  "name": "DocumentoTemplate",
+  "type": "object",
+  "properties": {
+    "tipo": {
+      "type": "string",
+      "enum": [
+        "EMPRESTIMO",
+        "DEVOLUCAO",
+        "AVARIA",
+        "EQUIPAMENTO"
+      ],
+      "description": "Tipo de documento"
+    },
+    "titulo": {
+      "type": "string",
+      "description": "T\u00edtulo do documento"
+    },
+    "conteudo": {
+      "type": "string",
+      "description": "Conte\u00fado HTML/texto do template com vari\u00e1veis {{campo}}"
+    },
+    "ativo": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "required": [
+    "tipo",
+    "titulo",
+    "conteudo"
+  ]
+}

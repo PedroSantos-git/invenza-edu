@@ -1,0 +1,133 @@
+{
+  "name": "Emprestimo",
+  "type": "object",
+  "properties": {
+    "equipamento_id": {
+      "type": "string",
+      "description": "ID do equipamento"
+    },
+    "pessoa_id": {
+      "type": "string",
+      "description": "ID da pessoa"
+    },
+    "equipamento_info": {
+      "type": "string",
+      "description": "Designa\u00e7\u00e3o do equipamento (cache)"
+    },
+    "pessoa_info": {
+      "type": "string",
+      "description": "Nome da pessoa (cache)"
+    },
+    "data_emprestimo": {
+      "type": "string",
+      "format": "date"
+    },
+    "estado": {
+      "type": "string",
+      "enum": [
+        "ATIVO",
+        "DEVOLVIDO",
+        "DEVOLVIDO COM AVARIA",
+        "DANOS PARA REVIS\u00c3O",
+        "PARA REVIS\u00c3O",
+        "ENTREGUE COM DANOS"
+      ],
+      "default": "ATIVO"
+    },
+    "acessorios_entregues": {
+      "type": "object",
+      "properties": {
+        "carregador": {
+          "type": "boolean"
+        },
+        "rato": {
+          "type": "boolean"
+        },
+        "hotspot": {
+          "type": "boolean"
+        },
+        "cartao_internet": {
+          "type": "boolean"
+        },
+        "mala": {
+          "type": "boolean"
+        },
+        "auscultadores": {
+          "type": "boolean"
+        },
+        "pen": {
+          "type": "boolean"
+        }
+      }
+    },
+    "notas_entrega": {
+      "type": "string"
+    },
+    "notas_devolucao": {
+      "type": "string"
+    },
+    "documentos_entrega": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "nome": {
+            "type": "string"
+          },
+          "tipo": {
+            "type": "string"
+          },
+          "data_upload": {
+            "type": "string"
+          },
+          "ativo": {
+            "type": "boolean"
+          },
+          "eliminado_por": {
+            "type": "string"
+          },
+          "data_eliminacao": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "documentos_devolucao": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "nome": {
+            "type": "string"
+          },
+          "tipo": {
+            "type": "string"
+          },
+          "data_upload": {
+            "type": "string"
+          },
+          "ativo": {
+            "type": "boolean"
+          },
+          "eliminado_por": {
+            "type": "string"
+          },
+          "data_eliminacao": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "equipamento_id",
+    "pessoa_id",
+    "data_emprestimo"
+  ]
+}

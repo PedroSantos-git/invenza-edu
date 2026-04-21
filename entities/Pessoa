@@ -1,0 +1,42 @@
+{
+  "name": "Pessoa",
+  "type": "object",
+  "properties": {
+    "nome": {
+      "type": "string",
+      "description": "Nome completo"
+    },
+    "email": {
+      "type": "string",
+      "description": "Email"
+    },
+    "tipo": {
+      "type": "string",
+      "enum": [
+        "Aluno",
+        "Docente"
+      ]
+    },
+    "turma": {
+      "type": "string"
+    },
+    "nif": {
+      "type": "string"
+    },
+    "telefone": {
+      "type": "string"
+    },
+    "foto": {
+      "type": "string",
+      "description": "URL da foto de perfil"
+    },
+    "ativo": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "required": [
+    "nome",
+    "tipo"
+  ]
+}

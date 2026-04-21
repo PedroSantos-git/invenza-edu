@@ -1,0 +1,51 @@
+{
+  "name": "Pedido",
+  "type": "object",
+  "properties": {
+    "pessoa_id": {
+      "type": "string",
+      "description": "ID da pessoa que fez o pedido"
+    },
+    "pessoa_info": {
+      "type": "string",
+      "description": "Nome da pessoa (cache)"
+    },
+    "tipo": {
+      "type": "string",
+      "enum": [
+        "EMPRÉSTIMO",
+        "DEVOLUÇÃO"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "PENDENTE",
+        "ACEITE",
+        "REJEITADO",
+        "AGENDADO",
+        "RESOLVIDO"
+      ],
+      "default": "PENDENTE"
+    },
+    "data_pedido": {
+      "type": "string",
+      "format": "date"
+    },
+    "data_agendamento": {
+      "type": "string",
+      "format": "date"
+    },
+    "notas": {
+      "type": "string"
+    },
+    "resolvido": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": [
+    "pessoa_id",
+    "tipo"
+  ]
+}

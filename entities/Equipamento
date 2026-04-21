@@ -1,0 +1,80 @@
+{
+  "name": "Equipamento",
+  "type": "object",
+  "properties": {
+    "numero_serie": {
+      "type": "string",
+      "description": "N\u00famero de s\u00e9rie do equipamento"
+    },
+    "numero_imobilizado": {
+      "type": "string",
+      "description": "N\u00famero de imobilizado"
+    },
+    "designacao": {
+      "type": "string",
+      "description": "Designa\u00e7\u00e3o/nome do equipamento"
+    },
+    "tipo": {
+      "type": "string",
+      "description": "Tipo de equipamento (livre, gerido pela tabela TipoEquipamento)"
+    },
+    "marca": {
+      "type": "string"
+    },
+    "modelo": {
+      "type": "string"
+    },
+    "estado": {
+      "type": "string",
+      "enum": [
+        "DISPON\u00cdVEL",
+        "EMPRESTADO",
+        "EM AVARIA",
+        "INUTILIZADO"
+      ],
+      "default": "DISPON\u00cdVEL"
+    },
+    "notas": {
+      "type": "string"
+    },
+    "data_entrada": {
+      "type": "string",
+      "format": "date",
+      "description": "Data de entrada do equipamento"
+    },
+    "documentos": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "nome": {
+            "type": "string"
+          },
+          "tipo": {
+            "type": "string"
+          },
+          "data_upload": {
+            "type": "string"
+          },
+          "ativo": {
+            "type": "boolean"
+          },
+          "eliminado_por": {
+            "type": "string"
+          },
+          "data_eliminacao": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "numero_serie",
+    "designacao",
+    "tipo"
+  ]
+}

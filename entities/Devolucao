@@ -1,0 +1,97 @@
+{
+  "name": "Devolucao",
+  "type": "object",
+  "properties": {
+    "emprestimo_id": {
+      "type": "string"
+    },
+    "equipamento_id": {
+      "type": "string"
+    },
+    "pessoa_id": {
+      "type": "string"
+    },
+    "equipamento_info": {
+      "type": "string"
+    },
+    "pessoa_info": {
+      "type": "string"
+    },
+    "data_devolucao": {
+      "type": "string",
+      "format": "date"
+    },
+    "estado_equipamento": {
+      "type": "string",
+      "enum": [
+        "COM DANOS",
+        "A REVER"
+      ]
+    },
+    "acessorios_devolvidos": {
+      "type": "object",
+      "properties": {
+        "carregador": {
+          "type": "boolean"
+        },
+        "rato": {
+          "type": "boolean"
+        },
+        "hotspot": {
+          "type": "boolean"
+        },
+        "cartao_internet": {
+          "type": "boolean"
+        },
+        "mala": {
+          "type": "boolean"
+        },
+        "auscultadores": {
+          "type": "boolean"
+        },
+        "pen": {
+          "type": "boolean"
+        }
+      }
+    },
+    "notas": {
+      "type": "string"
+    },
+    "documentos": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "nome": {
+            "type": "string"
+          },
+          "tipo": {
+            "type": "string"
+          },
+          "data_upload": {
+            "type": "string"
+          },
+          "ativo": {
+            "type": "boolean"
+          },
+          "eliminado_por": {
+            "type": "string"
+          },
+          "data_eliminacao": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "emprestimo_id",
+    "equipamento_id",
+    "pessoa_id",
+    "data_devolucao",
+    "estado_equipamento"
+  ]
+}
