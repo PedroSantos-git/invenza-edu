@@ -153,7 +153,8 @@ export default function Avarias() {
   const handleSearchInutilizados = () => {
     setIsSearching(true);
     const results = equipamentos.filter(eq => {
-      if (eq.estado !== 'INUTILIZADO') return false;
+      // Regra: pesquisar em todos os estados exceto 'ARRANJADO'
+      if (eq.estado === 'ARRANJADO') return false;
       
       // Encontrar todas as avarias deste equipamento, ordenadas pela mais recente
       const eqAvarias = avarias.filter(a => a.equipamento_id === eq.id)
@@ -662,7 +663,7 @@ export default function Avarias() {
               </Table>
             </div>
             <div className="text-[10px] text-muted-foreground text-center">
-              A pesquisa mostra equipamentos com estado "INUTILIZADO" filtrados pelo estado dos seus componentes na última avaria registada.
+              A pesquisa mostra equipamentos em qualquer estado (exceto "ARRANJADO") filtrados pelo estado dos seus componentes na última avaria registada.
             </div>
           </div>
         </DialogContent>

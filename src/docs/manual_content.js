@@ -175,8 +175,12 @@ export const MANUAL_CONTENT = {
       - **Componentes**: O estado dos componentes (Ecrã, Disco, RAM, etc.) é mapeado automaticamente: "ok" vira **OK**, "x" vira **Avariado** e "?" mantém-se como **?**.
       - **Estado Inicial**: Todas as avarias importadas entram no estado **A Rever** e colocam o equipamento automaticamente em **Manutenção**.
 
-      ### Histórico de Estados:
-      - Cada avaria guarda um log com a data e o utilizador que alterou o estado, permitindo auditar o tempo de reparação.
+      ### Pesquisa de Componentes em Equipamentos (Antiga "Pesquisa Inutilizados"):
+      Esta ferramenta avançada permite encontrar peças de substituição em todo o parque informático:
+      1. Clique em **Pesquisar Inutilizados** (agora abrangente).
+      2. Selecione o estado dos componentes que procura (ex: Ecrã "OK", Disco "Avariado").
+      3. O sistema lista todos os equipamentos que cumprem estes critérios, **exceto** aqueles que já estão marcados como **Arranjado** (pois esses estão prontos para uso integral).
+      4. Esta pesquisa é ideal para encontrar, por exemplo, um ecrã funcional num portátil que tem a board avariada e está parado em manutenção ou inutilizado.
     `
   },
   '/listas': {
