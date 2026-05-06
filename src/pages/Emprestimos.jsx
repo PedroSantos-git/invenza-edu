@@ -283,8 +283,18 @@ export default function Emprestimos() {
         });
       }
 
+      // Remover campos que não pertencem à tabela 'emprestimos'
+      // Estes campos são virtuais ou pertencem à tabela 'devolucoes'
+      const { 
+        devolucao_id, 
+        acessorios_devolvidos, 
+        notas_devolucao, 
+        documentos_devolucao,
+        ...updateData 
+      } = data;
+
       // Atualizar sempre o empréstimo (campos de entrega ou espelho da devolução)
-      return await db.entities.Emprestimo.update(id, data);
+      return await db.entities.Emprestimo.update(id, updateData);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['emprestimos'] });
