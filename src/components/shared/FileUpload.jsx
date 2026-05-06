@@ -1,37 +1,50 @@
 import React, { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Upload, Camera, FileText, Trash2, AlertTriangle } from 'lucide-react';
+import { Upload, Camera, FileText, Trash2, AlertTriangle, Scan } from 'lucide-react';
 
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
 import { db } from '@/api/db';
+import DocumentScanner from './DocumentScanner';
 
 export default function FileUpload({ files = [], onChange, label = "Documentos / Fotos", isAdmin = false }) {
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
   const [uploading, setUploading] = useState(false);
+  const [scannerOpen, setScannerOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null); // index to delete
   const { user } = useAuth();
 
   const handleUpload = async (e) => {
-    const selectedFiles = Array.from(e.target.files);
+    const selectedFiles = e.target ? Array.from(e.target.files) : [e];
     if (!selectedFiles.length) return;
     setUploading(true);
     const newFiles = [];
-    for (const file of selectedFiles) {
-      const { file_url } = await db.integrations.Core.UploadFile({ file });
-      newFiles.push({
-        url: file_url,
-        nome: file.name,
-        tipo: file.type,
-        data_upload: new Date().toISOString(),
-        ativo: true
-      });
+    try {
+      for (const file of selectedFiles) {
+        const { file_url } = await db.integrations.Core.UploadFile({ file });
+        newFiles.push({
+          url: file_url,
+          nome: file.name,
+          tipo: file.type,
+          data_upload: new Date().toISOString(),
+          ativo: true
+        });
+      }
+      onChange([...files, ...newFiles]);
+      toast.success(`${newFiles.length} ficheiro(s) carregado(s)`);
+    } catch (err) {
+      console.error("Erro no upload:", err);
+      toast.error("Erro ao carregar ficheiros.");
+    } finally {
+      setUploading(false);
+      if (e.target) e.target.value = '';
     }
-    onChange([...files, ...newFiles]);
-    setUploading(false);
-    toast.success(`${newFiles.length} ficheiro(s) carregado(s)`);
-    e.target.value = '';
+  };
+
+  const handleScannerComplete = async (pdfFile) => {
+    await handleUpload(pdfFile);
+    setScannerOpen(false);
   };
 
   const softDelete = (index) => {
@@ -64,9 +77,19 @@ export default function FileUpload({ files = [], onChange, label = "Documentos /
         </Button>
         <Button type="button" variant="outline" size="sm" onClick={() => cameraInputRef.current?.click()} disabled={uploading}>
           <Camera className="w-4 h-4 mr-2" />
-          Câmara
+          Foto
+        </Button>
+        <Button type="button" variant="default" size="sm" onClick={() => setScannerOpen(true)} disabled={uploading} className="bg-blue-600 hover:bg-blue-700">
+          <Scan className="w-4 h-4 mr-2" />
+          Scanner PDF
         </Button>
       </div>
+
+      <DocumentScanner 
+        open={scannerOpen} 
+        onClose={() => setScannerOpen(false)} 
+        onComplete={handleScannerComplete} 
+      />
 
       {activeFiles.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mt-3">
