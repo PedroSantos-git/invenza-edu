@@ -106,15 +106,38 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
     const resolveAccess = async (session) => {
-      // Create a promise that rejects after 30 seconds
+      // Reduzir timeout para 10 segundos para falhar mais rápido se houver rede lenta
+      // mas permitir que o site continue se a sessão for válida
       const timeout = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout ao verificar acesso')), 30000)
+        setTimeout(() => reject(new Error('Timeout ao verificar acesso')), 10000)
       );
 
       try {
         await Promise.race([_resolveAccessInternal(session), timeout]);
       } catch (err) {
         console.error('Erro em resolveAccess:', err);
+        
+        // Se houver timeout mas já tivermos uma sessão básica, 
+        // deixamos o utilizador entrar com dados mínimos para não bloquear o site
+        if (err.message === 'Timeout ao verificar acesso' && session?.user) {
+          console.warn('Procedendo com acesso limitado devido a timeout na base de dados');
+          const email = session.user.email?.toLowerCase();
+          const googleName = session.user.user_metadata?.full_name;
+          
+          const fallbackUser = {
+            id: session.user.id,
+            email,
+            full_name: googleName || email,
+            role: email === PROTECTED_EMAIL ? 'admin' : 'staff',
+            ativo: true,
+            access: 'staff',
+            isFallback: true
+          };
+          setUser(fallbackUser);
+          userRef.current = fallbackUser;
+          setIsAuthenticated(true);
+          return;
+        }
         throw err;
       }
     };
