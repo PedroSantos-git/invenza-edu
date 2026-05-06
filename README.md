@@ -39,3 +39,4 @@ Open [db.com](http://db.com) and click on Publish.
 Documentation: [https://docs.db.com/Integrations/Using-GitHub](https://docs.db.com/Integrations/Using-GitHub)
 
 Support: [https://app.db.com/support](https://app.db.com/support)
+
