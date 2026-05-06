@@ -15,16 +15,17 @@ export default function DocumentScanner({ open, onClose, onComplete }) {
   const startCamera = async () => {
     try {
       const s = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
+        video: { 
+          facingMode: 'environment', 
+          width: { ideal: 1920 }, 
+          height: { ideal: 1080 } 
+        },
         audio: false
       });
       setStream(s);
-      if (videoRef.current) {
-        videoRef.current.srcObject = s;
-      }
     } catch (err) {
       console.error("Erro ao aceder à câmara:", err);
-      toast.error("Não foi possível aceder à câmara.");
+      toast.error("Não foi possível aceder à câmara. Verifique as permissões.");
     }
   };
 
@@ -35,12 +36,27 @@ export default function DocumentScanner({ open, onClose, onComplete }) {
     }
   }, [stream]);
 
+  // Efeito para ligar o stream ao elemento de vídeo quando ambos estão disponíveis
+  React.useEffect(() => {
+    if (stream && videoRef.current) {
+      videoRef.current.srcObject = stream;
+      // Garantir que o vídeo começa a tocar
+      videoRef.current.play().catch(e => console.error("Erro ao dar play no vídeo:", e));
+    }
+  }, [stream]);
+
   const takePhoto = () => {
-    if (!videoRef.current || !canvasRef.current) return;
+    if (!videoRef.current || !canvasRef.current || !stream) return;
 
     const video = videoRef.current;
     const canvas = canvasRef.current;
     const context = canvas.getContext('2d');
+
+    // Verificar se o vídeo tem dimensões válidas
+    if (video.videoWidth === 0 || video.videoHeight === 0) {
+      toast.error("Aguarde que a câmara carregue a imagem.");
+      return;
+    }
 
     // Ajustar canvas para o tamanho do vídeo
     canvas.width = video.videoWidth;
@@ -116,22 +132,23 @@ export default function DocumentScanner({ open, onClose, onComplete }) {
         </DialogHeader>
 
         <div className="flex-1 relative bg-black flex items-center justify-center overflow-hidden">
-          {stream ? (
-            <video 
-              ref={videoRef} 
-              autoPlay 
-              playsInline 
-              className="w-full h-full object-contain"
-            />
-          ) : (
-            <div className="text-white flex flex-col items-center gap-2">
+          <video 
+            ref={videoRef} 
+            autoPlay 
+            playsInline 
+            muted
+            className={`w-full h-full object-contain ${!stream ? 'hidden' : 'block'}`}
+          />
+          
+          {!stream && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-white gap-2">
               <Loader2 className="w-8 h-8 animate-spin" />
               <p className="text-sm">A iniciar câmara...</p>
             </div>
           )}
           
           {/* Overlay de ajuda para enquadramento */}
-          <div className="absolute inset-8 border-2 border-white/20 border-dashed rounded-lg pointer-events-none" />
+          {stream && <div className="absolute inset-8 border-2 border-white/20 border-dashed rounded-lg pointer-events-none" />}
           
           <canvas ref={canvasRef} className="hidden" />
         </div>

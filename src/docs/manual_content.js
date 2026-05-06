@@ -86,6 +86,12 @@ export const MANUAL_CONTENT = {
       1. **Identificar a Pessoa**: Pesquise pelo Nome ou NIF. O sistema impede empréstimos a pessoas inativas.
       2. **Selecionar Equipamento**: O sistema apenas mostrará equipamentos que estejam "Disponíveis" (Rececionado ou Recondicionamento).
       3. **Formalizar**: Clique em "Concluir Empréstimo".
+
+      ### Gestão de Documentos e Scanner PDF:
+      Ao realizar um empréstimo ou editar um registo, pode anexar documentos:
+      - **Ficheiros**: Upload de documentos existentes (PDF, Word, Imagens).
+      - **Foto**: Captura direta de uma fotografia (útil em dispositivos móveis).
+      - **Scanner PDF**: Permite tirar múltiplas fotos de um documento físico e gerar automaticamente um único ficheiro PDF otimizado. Ideal para digitalizar declarações assinadas no momento.
       
       ### Importação de Autos (Novo):
       Pode agora criar empréstimos em massa a partir de ficheiros Word (.docx) dos Autos de Entrega:
