@@ -225,7 +225,6 @@ export default function Armazem() {
     const filtered = allEquipamentos
       .filter(eq => 
         (eq.numero_serie?.toLowerCase().includes(term)) || 
-        (eq.numero_imobilizado?.toLowerCase().includes(term)) ||
         (eq.marca?.toLowerCase().includes(term)) ||
         (eq.modelo?.toLowerCase().includes(term))
       )
@@ -249,7 +248,7 @@ export default function Armazem() {
       setNotFound(false);
       
       let eq = null;
-      // 1. Procurar por Número de Série (Insensível a maiúsculas/minúsculas)
+      // Procurar apenas por Número de Série (Insensível a maiúsculas/minúsculas)
       const { data: eqsBySerie } = await db.client
         .from('equipamentos')
         .select('*')
@@ -258,17 +257,6 @@ export default function Armazem() {
 
       if (eqsBySerie && eqsBySerie.length > 0) {
         eq = eqsBySerie[0];
-      } else {
-        // 2. Procurar por Número de Imobilizado (Insensível a maiúsculas/minúsculas)
-        const { data: eqsByImob } = await db.client
-          .from('equipamentos')
-          .select('*')
-          .ilike('numero_imobilizado', cleanValue)
-          .limit(1);
-          
-        if (eqsByImob && eqsByImob.length > 0) {
-          eq = eqsByImob[0];
-        }
       }
 
       if (!eq) {
@@ -825,7 +813,7 @@ const SearchField = ({
             handleAction(searchValue[actionType], actionType);
           }
         }}
-        placeholder="S/N ou Imobilizado..." 
+        placeholder="Número de Série..." 
         className={`bg-white ${borderClass} ${ringClass}`}
       />
       <p className={`text-[10px] ${colorClass.replace('bg-', 'text-').replace('/30', '')} mt-2 font-medium`}>
@@ -854,7 +842,6 @@ const SearchField = ({
                 </div>
                 <div className="text-[11px] text-slate-500 flex justify-between">
                   <span>{eq.marca} {eq.modelo}</span>
-                  {eq.numero_imobilizado && <span>Imob: {eq.numero_imobilizado}</span>}
                 </div>
               </button>
             ))}
