@@ -82,7 +82,7 @@ const SortButton = ({ column, currentSort, onSort, label }) => {
 // Inline mini forms for creating equipment/person
 function MiniEquipamentoForm({ onCreated, onCancel }) {
   const qc = useQueryClient();
-  const [form, setForm] = useState({ designacao: '', numero_serie: '', numero_imobilizado: '', marca: '', modelo: '', tipo: 'Portátil', estado: 'Rececionado', documentos: [] });
+  const [form, setForm] = useState({ designacao: '', numero_serie: '', marca: '', modelo: '', tipo: 'Portátil', estado: 'Rececionado', documentos: [] });
   const { data: tipos = [] } = useQuery({ queryKey: ['tipos-equipamento'], queryFn: () => db.entities.TipoEquipamento.list() });
   const tiposAtivos = tipos.filter(t => t.ativo !== false);
   const mut = useMutation({
@@ -95,7 +95,6 @@ function MiniEquipamentoForm({ onCreated, onCancel }) {
       <div><Label>Designação *</Label><Input value={form.designacao} onChange={e => setForm({...form, designacao: e.target.value})} /></div>
       <div className="grid grid-cols-2 gap-2">
         <div><Label>Nº Série *</Label><Input value={form.numero_serie} onChange={e => setForm({...form, numero_serie: e.target.value})} /></div>
-        <div><Label>Nº Imobilizado</Label><Input value={form.numero_imobilizado} onChange={e => setForm({...form, numero_imobilizado: e.target.value})} /></div>
         <div><Label>Marca</Label><Input value={form.marca} onChange={e => setForm({...form, marca: e.target.value})} /></div>
         <div><Label>Modelo</Label><Input value={form.modelo} onChange={e => setForm({...form, modelo: e.target.value})} /></div>
         <div className="col-span-2">
@@ -155,6 +154,7 @@ export default function Emprestimos() {
   const isAdmin = user?.email === PROTECTED_EMAIL || user?.role === 'admin';
 
   const [searchTerm, setSearchTerm] = useState('');
+  const [filtroEstado, setFiltroEstado] = useState('todos');
   const [selectedEmp, setSelectedEmp] = useState(null);
   const [selectedDoc, setSelectedDoc] = useState(null);
   const [sort, setSort] = useState({ column: 'created_at', ascending: false });
@@ -824,7 +824,7 @@ export default function Emprestimos() {
                 ) : (
                   <>
                     <div className="flex gap-2">
-                      <Input placeholder="Nome, nº série, imobilizado..." value={eqSearch} onChange={e => setEqSearch(e.target.value)} className="flex-1" />
+                      <Input placeholder="Nome, nº série..." value={eqSearch} onChange={e => setEqSearch(e.target.value)} className="flex-1" />
                       <SmartScanner onResult={v => setEqSearch(v)} label="Ler Equipamento" />
                     </div>
                     <div className="max-h-40 overflow-y-auto space-y-1">
