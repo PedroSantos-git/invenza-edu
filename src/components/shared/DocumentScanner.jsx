@@ -75,26 +75,22 @@ export default function DocumentScanner({ open, onClose, onComplete }) {
     const width = canvas.width;
     const height = canvas.height;
 
-    // A. Detecção de Margens Aprimorada
-    // Analisamos as bordas para encontrar o retângulo do papel
+    // A. Detecção de Margens para Recorte (Crop)
+    // Procuramos o retângulo que contém o papel (pixels claros)
     const imageData = ctx.getImageData(0, 0, width, height);
     const data = imageData.data;
     
-    // 1. Encontrar limites baseados em brilho e saturação (para ignorar cores que não sejam papel)
     let minX = width, minY = height, maxX = 0, maxY = 0;
     let found = false;
 
-    const step = 4;
+    const step = 4; 
     for (let y = 0; y < height; y += step) {
       for (let x = 0; x < width; x += step) {
         const i = (y * width + x) * 4;
-        const r = data[i], g = data[i+1], b = data[i+2];
+        const brightness = (data[i] + data[i+1] + data[i+2]) / 3;
         
-        const brightness = (r + g + b) / 3;
-        // Papel é geralmente brilhante e com pouca saturação (quase cinza/branco)
-        const saturation = Math.max(r, g, b) - Math.min(r, g, b);
-        
-        if (brightness > 130 && saturation < 40) {
+        // Threshold para papel branco em ambiente comum
+        if (brightness > 140) { 
           if (x < minX) minX = x;
           if (x > maxX) maxX = x;
           if (y < minY) minY = y;
@@ -104,56 +100,25 @@ export default function DocumentScanner({ open, onClose, onComplete }) {
       }
     }
 
-    // Se não detetar uma área mínima (30% da imagem), assume a imagem toda
-    if (!found || (maxX - minX) < width * 0.3) {
+    // Se não detetar uma área mínima razoável, usa a imagem toda
+    if (!found || (maxX - minX) < width * 0.2) {
       minX = 0; minY = 0; maxX = width; maxY = height;
-    } else {
-      // Adicionar margem de segurança
-      const padX = (maxX - minX) * 0.02;
-      const padY = (maxY - minY) * 0.02;
-      minX = Math.max(0, minX - padX);
-      minY = Math.max(0, minY - padY);
-      maxX = Math.min(width, maxX + padX);
-      maxY = Math.min(height, maxY + padY);
     }
 
     const cropWidth = maxX - minX;
     const cropHeight = maxY - minY;
     
-    // B. Alisamento e Limpeza (Look de Scanner)
+    // B. Criar novo canvas apenas com o recorte (sem margens extras)
     const tempCanvas = document.createElement('canvas');
     tempCanvas.width = cropWidth;
     tempCanvas.height = cropHeight;
     const tempCtx = tempCanvas.getContext('2d');
 
-    // 1. Desenhar recorte com filtros de contraste agressivos para "alisar" o fundo
-    // O contraste alto ajuda a transformar cinzas claros (sombras/vincos) em branco
-    tempCtx.filter = 'contrast(1.6) brightness(1.1) grayscale(1)';
-    tempCtx.drawImage(canvas, minX, minY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
-
-    // 2. Adaptive-like Thresholding (Simulado)
-    // Percorremos a imagem e forçamos o branco onde há pouco contraste (fundo) 
-    // e o preto onde há detalhes escuros (texto)
-    const finalData = tempCtx.getImageData(0, 0, cropWidth, cropHeight);
-    const d = finalData.data;
+    // Aplicar apenas filtros leves para manter o aspeto natural da primeira versão
+    tempCtx.filter = 'contrast(1.2) brightness(1.05) grayscale(1)';
     
-    for (let i = 0; i < d.length; i += 4) {
-      const r = d[i], g = d[i+1], b = d[i+2];
-      const avg = (r + g + b) / 3;
-      
-      if (avg > 180) { 
-        // Branco puro para o fundo (remove sombras e "alisa" o papel)
-        d[i] = 255; d[i+1] = 255; d[i+2] = 255;
-      } else if (avg < 90) {
-        // Preto puro para o texto (garante nitidez)
-        d[i] = 0; d[i+1] = 0; d[i+2] = 0;
-      } else {
-        // Tons médios: aumentar contraste local
-        const enhanced = avg > 140 ? 255 : 0;
-        d[i] = d[i+1] = d[i+2] = enhanced;
-      }
-    }
-    tempCtx.putImageData(finalData, 0, 0);
+    // Desenhar a parte recortada exatamente nas margens encontradas
+    tempCtx.drawImage(canvas, minX, minY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
 
     return tempCanvas.toDataURL('image/jpeg', 0.8);
   };
