@@ -135,7 +135,9 @@ export default function Avarias() {
     const matchSearch = !search || [
       a.equipamentoLabel,
       a.equipamentoSn,
-      a.diagnostico
+      a.diagnostico,
+      a.numero_avaria?.toString(),
+      `#${a.numero_avaria?.toString().padStart(4, '0')}`
     ].some(f => f?.toLowerCase().includes(search.toLowerCase()));
     
     let matchEstado = false;
