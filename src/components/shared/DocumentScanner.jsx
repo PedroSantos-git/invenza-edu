@@ -50,7 +50,7 @@ export default function DocumentScanner({ open, onClose, onComplete }) {
 
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    const context = canvas.getContext('2d');
+    const context = canvas.getContext('2d', { willReadFrequently: true });
 
     // Verificar se o vídeo tem dimensões válidas
     if (video.videoWidth === 0 || video.videoHeight === 0) {
@@ -58,19 +58,95 @@ export default function DocumentScanner({ open, onClose, onComplete }) {
       return;
     }
 
-    // Ajustar canvas para o tamanho do vídeo
+    // 1. Capturar frame original
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
-
-    // Desenhar frame do vídeo no canvas
     context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    // Aplicar filtros básicos para parecer digitalizado (contraste/brilho)
-    // No futuro podemos adicionar corte automático de margens
+    // 2. Processamento de Imagem (Digitalização)
+    const processedPhoto = processImage(canvas);
     
-    const photoData = canvas.toDataURL('image/jpeg', 0.8);
-    setPhotos([...photos, photoData]);
+    setPhotos([...photos, processedPhoto]);
     toast.success(`Página ${photos.length + 1} capturada`);
+  };
+
+  const processImage = (canvas) => {
+    const ctx = canvas.getContext('2d');
+    const width = canvas.width;
+    const height = canvas.height;
+
+    // A. Detecção de Margens (Simplificada)
+    // Procuramos o retângulo que contém a maior parte do conteúdo (papel branco sobre fundo escuro)
+    const imageData = ctx.getImageData(0, 0, width, height);
+    const data = imageData.data;
+    
+    let minX = width, minY = height, maxX = 0, maxY = 0;
+    let found = false;
+
+    // Amostragem para performance (saltar pixels)
+    const step = 4; 
+    for (let y = 0; y < height; y += step) {
+      for (let x = 0; x < width; x += step) {
+        const i = (y * width + x) * 4;
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+        
+        // Critério de "brancura" para detetar o papel
+        // Em ambientes de digitalização, o papel é significativamente mais claro que o fundo
+        const brightness = (r + g + b) / 3;
+        if (brightness > 160) { // Threshold para papel branco
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+          found = true;
+        }
+      }
+    }
+
+    // Adicionar margem de segurança de 5% se detetado, senão usar imagem toda
+    if (found && (maxX - minX) > width * 0.3) {
+      const padding = 20;
+      minX = Math.max(0, minX - padding);
+      minY = Math.max(0, minY - padding);
+      maxX = Math.min(width, maxX + padding);
+      maxY = Math.min(height, maxY + padding);
+    } else {
+      minX = 0; minY = 0; maxX = width; maxY = height;
+    }
+
+    // B. Criar novo canvas com o recorte e filtros
+    const cropWidth = maxX - minX;
+    const cropHeight = maxY - minY;
+    
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = cropWidth;
+    tempCanvas.height = cropHeight;
+    const tempCtx = tempCanvas.getContext('2d');
+
+    // Aplicar filtros de digitalização antes de desenhar o recorte
+    // 1. Grayscale + High Contrast
+    tempCtx.filter = 'contrast(1.4) brightness(1.1) grayscale(1)';
+    
+    // Desenhar a parte recortada no novo canvas
+    tempCtx.drawImage(canvas, minX, minY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
+
+    // C. Pós-processamento para "limpar" o fundo (opcional)
+    // Se quisermos um look ainda mais limpo, podemos forçar pixels quase brancos a branco puro
+    const finalData = tempCtx.getImageData(0, 0, cropWidth, cropHeight);
+    const d = finalData.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const avg = (d[i] + d[i+1] + d[i+2]) / 3;
+      if (avg > 200) { // Se for muito claro, vira branco puro
+        d[i] = 255; d[i+1] = 255; d[i+2] = 255;
+      } else if (avg < 40) { // Se for muito escuro, vira preto puro (texto)
+        d[i] = 0; d[i+1] = 0; d[i+2] = 0;
+      }
+    }
+    tempCtx.putImageData(finalData, 0, 0);
+
+    return tempCanvas.toDataURL('image/jpeg', 0.8);
   };
 
   const removePhoto = (index) => {
