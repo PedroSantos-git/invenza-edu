@@ -364,7 +364,7 @@ export default function Emprestimos() {
   });
 
   const filteredEq = equipamentosDisponiveis.filter(e =>
-    eqSearch === '' || [e.numero_serie, e.numero_imobilizado, e.designacao, e.marca, e.modelo].some(f => f?.toLowerCase().includes(eqSearch.toLowerCase()))
+    eqSearch === '' || [e.numero_serie, e.designacao, e.marca, e.modelo].some(f => f?.toLowerCase().includes(eqSearch.toLowerCase()))
   );
 
   const filteredPessoas = pessoas.filter(p =>
@@ -373,12 +373,12 @@ export default function Emprestimos() {
 
   const filtered = (emprestimosDecorados || [])
     .filter(e => {
-      const matchSearch = !search || [
+      const matchSearch = !searchTerm || [
         e.equipamentoLabel,
         e.equipamentoSn,
         e.pessoaNome,
         e.pessoaNif
-      ].some(f => f?.toLowerCase().includes(search.toLowerCase()));
+      ].some(f => f?.toLowerCase().includes(searchTerm.toLowerCase()));
       const matchEstado = filtroEstado === 'todos' || e.estado === filtroEstado;
       return matchSearch && matchEstado;
     });
@@ -450,7 +450,7 @@ export default function Emprestimos() {
         const { data: eqs } = await db.client
           .from('equipamentos')
           .select('*')
-          .or(`numero_serie.eq.${sn},numero_imobilizado.eq.${sn}`);
+          .eq('numero_serie', sn);
 
         let eq = eqs?.[0];
         let isSimilar = false;
@@ -459,8 +459,7 @@ export default function Emprestimos() {
           // Busca aproximada (typo ou troca de letras)
           // Aumentado para distância 2 (dois caracteres errados)
           eq = (equipamentosTodos || []).find(e => 
-            damerauLevenshtein(e.numero_serie, sn) <= 2 || 
-            damerauLevenshtein(e.numero_imobilizado, sn) <= 2
+            damerauLevenshtein(e.numero_serie, sn) <= 2
           );
           if (eq) isSimilar = true;
         }
@@ -736,9 +735,9 @@ export default function Emprestimos() {
         <div className="relative flex-1 flex gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input placeholder="Pesquisar..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+            <Input placeholder="Pesquisar..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-9" />
           </div>
-          <SmartScanner onResult={v => setSearch(v)} label="Pesquisar por scanner" />
+          <SmartScanner onResult={v => setSearchTerm(v)} label="Pesquisar por scanner" />
         </div>
         <Select value={filtroEstado} onValueChange={setFiltroEstado}>
           <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>

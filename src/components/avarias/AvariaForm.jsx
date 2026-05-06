@@ -37,7 +37,6 @@ function MiniEquipamentoForm({ onCreated, onCancel }) {
       <div><Label>Designação *</Label><Input value={form.designacao} onChange={e => setForm({...form, designacao: e.target.value})} /></div>
       <div className="grid grid-cols-2 gap-2">
         <div><Label>Nº Série *</Label><Input value={form.numero_serie} onChange={e => setForm({...form, numero_serie: e.target.value})} /></div>
-        <div><Label>Nº Imobilizado</Label><Input value={form.numero_imobilizado} onChange={e => setForm({...form, numero_imobilizado: e.target.value})} /></div>
         <div><Label>Marca</Label><Input value={form.marca} onChange={e => setForm({...form, marca: e.target.value})} /></div>
         <div><Label>Modelo</Label><Input value={form.modelo} onChange={e => setForm({...form, modelo: e.target.value})} /></div>
         <div className="col-span-2">
@@ -74,7 +73,7 @@ export default function AvariaForm({ open, onClose }) {
   });
 
   const availableEq = equipamentos.filter(e =>
-    eqSearch === '' || [e.numero_serie, e.numero_imobilizado, e.designacao, e.marca, e.modelo].some(f => f?.toLowerCase().includes(eqSearch.toLowerCase()))
+    eqSearch === '' || [e.numero_serie, e.designacao, e.marca, e.modelo].some(f => f?.toLowerCase().includes(eqSearch.toLowerCase()))
   );
 
   const createMutation = useMutation({
@@ -164,7 +163,7 @@ export default function AvariaForm({ open, onClose }) {
               ) : (
                 <>
                   <div className="flex gap-2">
-                    <Input placeholder="Nome, nº série, imobilizado..." value={eqSearch} onChange={e => setEqSearch(e.target.value)} className="flex-1" />
+                    <Input placeholder="Nome, nº série..." value={eqSearch} onChange={e => setEqSearch(e.target.value)} className="flex-1" />
                     <SmartScanner onResult={v => setEqSearch(v)} label="Ler Equipamento" />
                   </div>
                 <div className="max-h-40 overflow-y-auto space-y-1">

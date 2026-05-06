@@ -117,8 +117,7 @@ export default function Pedidos() {
       const matchSearch = !search || 
         p.pessoa_info?.toLowerCase().includes(search.toLowerCase()) ||
         p.notas?.toLowerCase().includes(search.toLowerCase()) ||
-        p.numero_serie?.toLowerCase().includes(search.toLowerCase()) ||
-        p.numero_imobilizado?.toLowerCase().includes(search.toLowerCase());
+        p.numero_serie?.toLowerCase().includes(search.toLowerCase());
       const matchStatus = filtroStatus === 'todos' || p.status === filtroStatus;
       return matchSearch && matchStatus;
     });
@@ -213,7 +212,6 @@ export default function Pedidos() {
               <p className="font-bold text-amber-900 uppercase">{p.descricao_equipamento}</p>
               <div className="flex gap-2 text-amber-700">
                 {p.numero_serie && <span>S/N: {p.numero_serie}</span>}
-                {p.numero_imobilizado && <span>INV: {p.numero_imobilizado}</span>}
               </div>
             </div>
           ) : (
@@ -294,7 +292,7 @@ export default function Pedidos() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input 
-              placeholder="Pesquisar por nome, email, série, imobilizado..." 
+              placeholder="Pesquisar por nome, email, série..." 
               value={search} 
               onChange={e => setSearch(e.target.value)} 
               className="pl-9 h-10 shadow-sm" 

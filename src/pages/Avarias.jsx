@@ -261,20 +261,16 @@ export default function Avarias() {
             }
 
             const sn = row['Nº Série'];
-            const imob = row['Nº Imobilizado'];
             
             // Procurar equipamento
             let eq = null;
             if (sn) {
               eq = equipamentos.find(e => String(e.numero_serie || '').trim() === String(sn).trim());
             }
-            if (!eq && imob) {
-              eq = equipamentos.find(e => String(e.numero_imobilizado || '').trim() === String(imob).trim());
-            }
 
             if (!eq) {
               notFoundEqs.push({
-                identificador: sn || imob || 'Desconhecido',
+                identificador: sn || 'Desconhecido',
                 linha: i + 2,
                 motivo: 'Equipamento não encontrado no sistema'
               });
@@ -621,7 +617,7 @@ export default function Avarias() {
                   <TableRow className="bg-muted/50">
                     <TableHead className="w-24">Nº Avaria</TableHead>
                     <TableHead>Equipamento</TableHead>
-                    <TableHead>Série / Imobilizado</TableHead>
+                    <TableHead>Nº Série</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -646,10 +642,7 @@ export default function Avarias() {
                           {[eq.tipo, eq.marca, eq.modelo].filter(Boolean).join(' ') || eq.designacao}
                         </TableCell>
                         <TableCell>
-                          <div className="flex flex-col">
-                            <span className="font-mono text-[11px] font-bold">{eq.numero_serie}</span>
-                            <span className="text-[10px] text-muted-foreground">{eq.numero_imobilizado || '—'}</span>
-                          </div>
+                          <span className="font-mono text-[11px] font-bold">{eq.numero_serie}</span>
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1">
@@ -661,16 +654,6 @@ export default function Avarias() {
                             >
                               <Copy className="w-3.5 h-3.5" />
                             </Button>
-                            {eq.numero_imobilizado && (
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                title="Copiar Imobilizado"
-                                onClick={e => copyToClipboard(eq.numero_imobilizado, e)}
-                              >
-                                <ExternalLink className="w-3.5 h-3.5" />
-                              </Button>
-                            )}
                           </div>
                         </TableCell>
                       </TableRow>

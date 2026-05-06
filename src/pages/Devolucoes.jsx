@@ -64,10 +64,9 @@ function MiniEquipamentoForm({ onCreated, onCancel }) {
       <div><Label>Designação *</Label><Input value={form.designacao} onChange={e => setForm({...form, designacao: e.target.value})} /></div>
       <div className="grid grid-cols-2 gap-2">
         <div><Label>Nº Série *</Label><Input value={form.numero_serie} onChange={e => setForm({...form, numero_serie: e.target.value})} /></div>
-        <div><Label>Nº Imobilizado</Label><Input value={form.numero_imobilizado} onChange={e => setForm({...form, numero_imobilizado: e.target.value})} /></div>
         <div><Label>Marca</Label><Input value={form.marca} onChange={e => setForm({...form, marca: e.target.value})} /></div>
         <div><Label>Modelo</Label><Input value={form.modelo} onChange={e => setForm({...form, modelo: e.target.value})} /></div>
-        <div className="col-span-2">
+        <div className="col-span-1">
           <Label>Tipo</Label>
           {tiposAtivos.length > 0 ? (
             <Select value={form.tipo} onValueChange={v => setForm({...form, tipo: v})}>
@@ -380,7 +379,7 @@ export default function Devolucoes() {
   );
 
   const filteredEq = equipamentosDisponiveis.filter(e =>
-    eqSearch === '' || [e.numero_serie, e.numero_imobilizado, e.designacao, e.marca, e.modelo].some(f => f?.toLowerCase().includes(eqSearch.toLowerCase()))
+    eqSearch === '' || [e.numero_serie, e.designacao, e.marca, e.modelo].some(f => f?.toLowerCase().includes(eqSearch.toLowerCase()))
   );
 
   const filteredPessoas = pessoas.filter(p =>
