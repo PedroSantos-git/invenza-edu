@@ -1,18 +1,47 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { FileText, Download, X, ZoomIn } from 'lucide-react';
+import { FileText, Download, X, ZoomIn, Loader2 } from 'lucide-react';
 import { repairR2Url, isImageDoc } from '@/utils/r2Helpers';
+import mammoth from 'mammoth';
 
 export default function DocumentViewer({ open, onClose, document }) {
+  const [wordHtml, setWordHtml] = useState(null);
+  const [loadingWord, setLoadingWord] = useState(false);
+
+  useEffect(() => {
+    if (open && isWord && document?.url) {
+      loadWordDoc();
+    } else {
+      setWordHtml(null);
+    }
+  }, [open, document]);
+
   if (!document) return null;
 
   const isImage = isImageDoc(document);
   const isPdf = document.tipo === 'application/pdf' || 
                 /\.pdf$/i.test(document.url);
+  const isWord = document.tipo === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || 
+                 /\.docx$/i.test(document.url);
 
   // Garantir que a URL está limpa e forçar o uso do domínio público se detectarmos o endpoint interno.
   const cleanUrl = repairR2Url(document.url);
+
+  const loadWordDoc = async () => {
+    try {
+      setLoadingWord(true);
+      const response = await fetch(cleanUrl);
+      const arrayBuffer = await response.arrayBuffer();
+      const result = await mammoth.convertToHtml({ arrayBuffer });
+      setWordHtml(result.value);
+    } catch (err) {
+      console.error("Erro ao converter Word:", err);
+      setWordHtml('<p class="text-red-500">Erro ao carregar documento Word. Por favor, faça download para visualizar.</p>');
+    } finally {
+      setLoadingWord(false);
+    }
+  };
 
   const handleDownload = () => {
     window.open(cleanUrl, '_blank');
@@ -58,16 +87,33 @@ export default function DocumentViewer({ open, onClose, document }) {
                 onError={(e) => {
                   console.error("Erro ao carregar imagem no viewer:", cleanUrl);
                   e.target.onerror = null;
-                  e.target.src = 'https://placehold.co/600x400?text=Erro+ao+carregar+imagem';
+                  // Tentar limpar a URL se falhar (pode ser problema de query params de auth do S3)
+                  const urlOnly = cleanUrl.split('?')[0];
+                  if (e.target.src !== urlOnly) {
+                    e.target.src = urlOnly;
+                  } else {
+                    e.target.src = 'https://placehold.co/600x400?text=Erro+ao+carregar+imagem';
+                  }
                 }}
               />
             </div>
           ) : isPdf ? (
             <iframe 
-              src={`${cleanUrl}#toolbar=0`} 
+              src={`${cleanUrl.split('?')[0]}#toolbar=0`} 
               className="w-full h-full border-none rounded shadow-lg bg-white"
               title={document.nome}
             />
+          ) : isWord ? (
+            <div className="w-full h-full bg-white rounded shadow-lg p-8 overflow-auto prose prose-sm max-w-none">
+              {loadingWord ? (
+                <div className="flex flex-col items-center justify-center h-full gap-2">
+                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                  <p className="text-sm text-muted-foreground">A converter documento Word...</p>
+                </div>
+              ) : (
+                <div dangerouslySetInnerHTML={{ __html: wordHtml }} />
+              )}
+            </div>
           ) : (
             <div className="text-center p-12 bg-white rounded-xl shadow-sm border max-w-sm">
               <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
@@ -86,11 +132,12 @@ export default function DocumentViewer({ open, onClose, document }) {
         </div>
         
         <div className="p-3 bg-white border-t flex justify-center items-center gap-4">
-          <p className="text-[10px] text-muted-foreground italic">
-            Dica: Se o documento não carregar, verifique se a URL pública do R2 está configurada corretamente.
+          <p className="text-[10px] text-muted-foreground italic text-center">
+            Nota: A visualização de documentos Word é experimental. Se notar erros de formatação, faça download do ficheiro original.
           </p>
         </div>
       </DialogContent>
     </Dialog>
   );
 }
+
