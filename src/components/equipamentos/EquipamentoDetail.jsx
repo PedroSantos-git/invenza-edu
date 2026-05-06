@@ -1,13 +1,15 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { db } from '@/api/db';
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Pencil, Monitor, FileText } from 'lucide-react';
+import { Pencil, Monitor, FileText, Eye } from 'lucide-react';
 import StatusBadge from '@/components/shared/StatusBadge';
 import { format, isValid } from 'date-fns';
+import DocumentViewer from '@/components/shared/DocumentViewer';
+import { repairR2Url, isImageDoc } from '@/utils/r2Helpers';
 
 const safeFormat = (dateStr, formatStr = 'dd/MM/yyyy') => {
   if (!dateStr) return '—';
@@ -16,6 +18,7 @@ const safeFormat = (dateStr, formatStr = 'dd/MM/yyyy') => {
 };
 
 export default function EquipamentoDetail({ open, onClose, equipamento, onEdit, isAdmin = false }) {
+  const [selectedDoc, setSelectedDoc] = useState(null);
   const { data: emprestimos = [] } = useQuery({
     queryKey: ['emprestimos-eq', equipamento?.id],
     queryFn: () => db.entities.Emprestimo.filter({ equipamento_id: equipamento.id }, '-created_at'),
@@ -99,14 +102,23 @@ export default function EquipamentoDetail({ open, onClose, equipamento, onEdit, 
               ) : (
                 <div className="grid grid-cols-3 gap-3">
                   {equipamento.documentos.map((doc, i) => (
-                    <a key={i} href={doc.url} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center p-3 rounded-lg border hover:bg-muted/50 transition-colors">
-                      {doc.tipo?.startsWith('image/') ? (
-                        <img src={doc.url} className="w-full h-20 object-cover rounded" />
+                    <div 
+                      key={i} 
+                      onClick={() => setSelectedDoc(doc)}
+                      className="flex flex-col items-center p-3 rounded-lg border hover:bg-muted/50 transition-colors cursor-pointer group relative"
+                    >
+                      <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity bg-primary text-white p-1 rounded-full shadow-sm">
+                        <Eye className="w-3 h-3" />
+                      </div>
+                      {isImageDoc(doc) ? (
+                        <img src={repairR2Url(doc.url)} className="w-full h-20 object-cover rounded shadow-sm" />
                       ) : (
-                        <FileText className="w-8 h-8 text-muted-foreground" />
+                        <div className="w-full h-20 flex items-center justify-center bg-muted/30 rounded border border-dashed">
+                          <FileText className="w-8 h-8 text-muted-foreground" />
+                        </div>
                       )}
-                      <span className="text-[10px] text-muted-foreground mt-1 truncate w-full text-center">{doc.nome}</span>
-                    </a>
+                      <span className="text-[10px] text-muted-foreground mt-2 truncate w-full text-center font-medium">{doc.nome}</span>
+                    </div>
                   ))}
                 </div>
               )}
@@ -114,6 +126,12 @@ export default function EquipamentoDetail({ open, onClose, equipamento, onEdit, 
           </Tabs>
         </div>
       </DialogContent>
+
+      <DocumentViewer 
+        open={!!selectedDoc} 
+        onClose={() => setSelectedDoc(null)} 
+        document={selectedDoc} 
+      />
     </Dialog>
   );
 }

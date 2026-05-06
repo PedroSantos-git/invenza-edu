@@ -26,6 +26,33 @@
     "telefone": {
       "type": "string"
     },
+    "escalao": {
+      "type": "string"
+    },
+    "email_pessoal": {
+      "type": "string"
+    },
+    "ee_nome": {
+      "type": "string"
+    },
+    "ee_tipo_doc": {
+      "type": "string"
+    },
+    "ee_num_doc": {
+      "type": "string"
+    },
+    "ee_morada": {
+      "type": "string"
+    },
+    "ee_email": {
+      "type": "string"
+    },
+    "ee_nif": {
+      "type": "string"
+    },
+    "ee_telefone": {
+      "type": "string"
+    },
     "foto": {
       "type": "string",
       "description": "URL da foto de perfil"

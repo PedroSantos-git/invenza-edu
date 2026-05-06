@@ -10,12 +10,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import StatusBadge from '@/components/shared/StatusBadge';
 import FileUpload from '@/components/shared/FileUpload';
+import DocumentViewer from '@/components/shared/DocumentViewer';
 import ComponentSelector, { COMP_LABELS } from '@/components/shared/ComponentSelector';
 import ConfirmDialog from '@/components/shared/ConfirmDialog';
 import EquipamentoDetail from '@/components/equipamentos/EquipamentoDetail';
 import { toast } from 'sonner';
 import { format, isValid } from 'date-fns';
-import { History, FileDown } from 'lucide-react';
+import { History, FileDown, Eye } from 'lucide-react';
+import { repairR2Url, isImageDoc } from '@/utils/r2Helpers';
 import { gerarPDFAvaria } from '@/utils/pdfGenerator';
 import { useAuth } from '@/lib/AuthContext';
 
@@ -38,6 +40,7 @@ export default function AvariaDetail({ open, onClose, avaria }) {
   const [confirmClose, setConfirmClose] = useState(false);
   const [closeEstado, setCloseEstado] = useState('');
   const [showEquipDetail, setShowEquipDetail] = useState(false);
+  const [selectedDoc, setSelectedDoc] = useState(null);
 
   const startEdit = () => {
     setForm({
@@ -75,7 +78,12 @@ export default function AvariaDetail({ open, onClose, avaria }) {
 
       if (['ARRANJADO', 'INUTILIZADO'].includes(data.estado)) {
         updates.data_resolucao = new Date().toISOString().split('T')[0];
-        const newEquipState = data.estado === 'ARRANJADO' ? 'DISPONÍVEL' : 'INUTILIZADO';
+      }
+
+      await db.entities.Avaria.update(avaria.id, updates);
+
+      if (['ARRANJADO', 'INUTILIZADO'].includes(data.estado)) {
+        const newEquipState = data.estado === 'ARRANJADO' ? 'Recondicionamento' : 'Inutilizado';
         await db.entities.Equipamento.update(avaria.equipamento_id, { estado: newEquipState });
 
         // Update related empréstimo if exists - find via devolucao_id
@@ -101,8 +109,6 @@ export default function AvariaDetail({ open, onClose, avaria }) {
           await db.entities.Emprestimo.update(dev.emprestimo_id, { estado: 'ENTREGUE COM DANOS' });
         }
       }
-
-      await db.entities.Avaria.update(avaria.id, updates);
     },
     onSuccess: () => {
       qc.invalidateQueries();
@@ -260,9 +266,20 @@ export default function AvariaDetail({ open, onClose, avaria }) {
                     <p className="text-sm font-semibold mb-2">Documentos</p>
                     <div className="grid grid-cols-3 gap-2">
                       {avaria.documentos.filter(d => d.ativo !== false).map((doc, i) => (
-                        <a key={i} href={doc.url} target="_blank" rel="noopener noreferrer" className="p-2 rounded border hover:bg-muted/50 text-center">
-                          {doc.tipo?.startsWith('image/') ? <img src={doc.url} className="w-full h-16 object-cover rounded" /> : <span className="text-xs">{doc.nome}</span>}
-                        </a>
+                        <div 
+                          key={i} 
+                          onClick={() => setSelectedDoc(doc)}
+                          className="p-2 rounded border hover:bg-muted/50 text-center cursor-pointer group relative"
+                        >
+                          <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity bg-primary text-white p-1 rounded-full shadow-sm">
+                            <Eye className="w-3 h-3" />
+                          </div>
+                          {isImageDoc(doc) ? (
+                            <img src={repairR2Url(doc.url)} className="w-full h-16 object-cover rounded" />
+                          ) : (
+                            <span className="text-xs">{doc.nome}</span>
+                          )}
+                        </div>
                       ))}
                     </div>
                   </div>
@@ -287,12 +304,18 @@ export default function AvariaDetail({ open, onClose, avaria }) {
         </DialogContent>
       </Dialog>
 
+      <DocumentViewer 
+        open={!!selectedDoc} 
+        onClose={() => setSelectedDoc(null)} 
+        document={selectedDoc} 
+      />
+
       <ConfirmDialog
         open={confirmClose}
         onClose={() => setConfirmClose(false)}
         onConfirm={() => updateMutation.mutate(form)}
         title={closeEstado === 'INUTILIZADO' ? 'Marcar como Inutilizado?' : 'Marcar como Arranjado?'}
-        description={closeEstado === 'INUTILIZADO' ? 'O equipamento será marcado como INUTILIZADO.' : 'O equipamento voltará ao estado DISPONÍVEL.'}
+        description={closeEstado === 'INUTILIZADO' ? 'O equipamento será marcado como Inutilizado.' : 'O equipamento passará para o estado Recondicionamento.'}
         confirmLabel="Confirmar"
         destructive={closeEstado === 'INUTILIZADO'}
       />

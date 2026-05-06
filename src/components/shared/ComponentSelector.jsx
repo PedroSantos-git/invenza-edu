@@ -14,6 +14,7 @@ export const COMP_LABELS = {
   ram: 'RAM',
   board: 'Board/Gráfica',
   bateria: 'Bateria',
+  ventoinha: 'Ventoinha',
   teclado: 'Teclado',
   touchpad: 'Touchpad'
 };

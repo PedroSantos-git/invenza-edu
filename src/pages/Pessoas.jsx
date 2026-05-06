@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { db } from '@/api/db';
 import { EmailService } from '@/api/emailService';
@@ -9,9 +9,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { Search, Pencil, Plus, FileSpreadsheet, Mail, Loader2, Clock } from 'lucide-react';
+import { Search, Pencil, Plus, FileSpreadsheet, Mail, Loader2, Clock, ArrowUpDown, ArrowUp, ArrowDown, CheckCircle2, XCircle, Trash2 } from 'lucide-react';
+import * as XLSX from 'xlsx';
+
+// Componente de Verificação de Pessoas Ativas
 import SmartScanner from '@/components/shared/SmartScanner';
 import RichTextEditor from '@/components/shared/RichTextEditor';
 import FileUpload from '@/components/shared/FileUpload';
@@ -19,13 +21,203 @@ import ImportDialog from '@/components/shared/ImportDialog';
 import PessoaDetail from '@/components/pessoas/PessoaDetail';
 import { toast } from 'sonner';
 
+function ActiveVerificationDialog({ open, onClose, currentPeople }) {
+  const qc = useQueryClient();
+  const fileRef = useRef(null);
+  const [pendingPeople, setPendingPeople] = useState([]);
+  const [readPeople, setReadPeople] = useState([]);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  // Ao abrir, inicializamos a lista de pendentes com todas as pessoas da DB
+  useEffect(() => {
+    if (open) {
+      setPendingPeople([...currentPeople]);
+      setReadPeople([]);
+    }
+  }, [open, currentPeople]);
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsProcessing(true);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const data = new Uint8Array(event.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(sheet);
+
+        // Identificar NIFs no ficheiro (procurar colunas comuns)
+        const fileNifs = new Set();
+        rows.forEach(row => {
+          // Procurar por chaves que contenham "nif" ou "contribuinte"
+          const nifKey = Object.keys(row).find(k => 
+            k.toLowerCase().includes('nif') || 
+            k.toLowerCase().includes('contribuinte') ||
+            k.toLowerCase().includes('identificação fiscal')
+          );
+          if (nifKey && row[nifKey]) {
+            fileNifs.add(String(row[nifKey]).trim());
+          }
+        });
+
+        // Filtrar pendentes: remover quem está no ficheiro
+        const remaining = pendingPeople.filter(p => !fileNifs.has(String(p.nif).trim()));
+        const found = pendingPeople.filter(p => fileNifs.has(String(p.nif).trim()));
+
+        setPendingPeople(remaining);
+        setReadPeople(prev => [...prev, ...found]);
+        toast.success(`Lidas ${found.length} pessoas do ficheiro. Restam ${remaining.length} pendentes.`);
+      } catch (err) {
+        toast.error("Erro ao ler ficheiro: " + err.message);
+      } finally {
+        setIsProcessing(false);
+        if (fileRef.current) fileRef.current.value = '';
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const confirmUpdate = async () => {
+    setIsProcessing(true);
+    try {
+      // Pessoas que sobraram na lista de pendentes -> ativo = false
+      // Pessoas que foram lidas (estavam no ficheiro) -> ativo = true
+      const updates = [
+        ...pendingPeople.map(p => ({ id: p.id, ativo: false })),
+        ...readPeople.map(p => ({ id: p.id, ativo: true }))
+      ];
+
+      // Executar em chunks para não sobrecarregar
+      const chunkSize = 50;
+      for (let i = 0; i < updates.length; i += chunkSize) {
+        const chunk = updates.slice(i, i + chunkSize);
+        await Promise.all(chunk.map(u => db.entities.Pessoa.update(u.id, { ativo: u.ativo })));
+      }
+
+      toast.success("Estado de atividade atualizado com sucesso!");
+      qc.invalidateQueries({ queryKey: ['pessoas'] });
+      onClose();
+    } catch (err) {
+      toast.error("Erro ao atualizar: " + err.message);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>Verificação de Pessoas Ativas</DialogTitle>
+          <DialogDescription>
+            Carregue ficheiros de alunos/docentes. As pessoas encontradas nos ficheiros serão mantidas como **Ativas**. 
+            As que sobrarem na lista no final serão marcadas como **Inativas**.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex-1 overflow-hidden flex flex-col gap-4 py-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-lg py-1">
+                {pendingPeople.length} Pendentes
+              </Badge>
+              <Badge variant="secondary" className="text-lg py-1">
+                {readPeople.length} Encontradas
+              </Badge>
+            </div>
+            <div className="flex gap-2">
+              <input 
+                type="file" 
+                ref={fileRef} 
+                onChange={handleFile} 
+                accept=".xlsx,.xls" 
+                className="hidden" 
+              />
+              <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={isProcessing}>
+                <FileSpreadsheet className="w-4 h-4 mr-2" /> Ler Ficheiro
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex-1 border rounded-md overflow-auto bg-muted/20">
+            <Table>
+              <TableHeader className="sticky top-0 bg-background z-10">
+                <TableRow>
+                  <TableHead>Nome</TableHead>
+                  <TableHead>NIF</TableHead>
+                  <TableHead>Tipo</TableHead>
+                  <TableHead>Turma</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {pendingPeople.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                      Lista vazia. Todas as pessoas foram encontradas ou não há registos.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  pendingPeople.map(p => (
+                    <TableRow key={p.id}>
+                      <TableCell className="font-medium">{p.nome}</TableCell>
+                      <TableCell className="font-mono text-xs">{p.nif}</TableCell>
+                      <TableCell>{p.tipo}</TableCell>
+                      <TableCell>{p.turma || '—'}</TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button variant="outline" onClick={onClose} disabled={isProcessing}>Cancelar</Button>
+          <Button onClick={confirmUpdate} disabled={isProcessing || (pendingPeople.length === 0 && readPeople.length === 0)}>
+            {isProcessing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
+            Confirmar e Atualizar Estados
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+const SortButton = ({ column, currentSort, onSort, label }) => {
+  const isSorted = currentSort.column === column;
+  return (
+    <Button 
+      variant="ghost" 
+      size="sm" 
+      className="-ml-3 h-8 data-[state=open]:bg-accent"
+      onClick={() => onSort(column)}
+    >
+      <span>{label}</span>
+      {isSorted ? (
+        currentSort.ascending ? (
+          <ArrowUp className="ml-2 h-4 w-4" />
+        ) : (
+          <ArrowDown className="ml-2 h-4 w-4" />
+        )
+      ) : (
+        <ArrowUpDown className="ml-2 h-4 w-4 opacity-0 group-hover:opacity-100" />
+      )}
+    </Button>
+  );
+};
+
 export default function Pessoas() {
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
   const [filtroTipo, setFiltroTipo] = useState('todos');
+  const [sort, setSort] = useState({ column: 'created_at', ascending: false });
   const [formOpen, setFormOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [verifyOpen, setVerifyOpen] = useState(false);
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
   const [selected, setSelected] = useState(null);
   const [form, setForm] = useState({});
@@ -34,8 +226,8 @@ export default function Pessoas() {
   const [emailForm, setEmailForm] = useState({ assunto: '', corpo: '' });
 
   const { data: pessoas = [], isLoading } = useQuery({
-    queryKey: ['pessoas'],
-    queryFn: () => db.entities.Pessoa.list('-created_at')
+    queryKey: ['pessoas', sort],
+    queryFn: () => db.entities.Pessoa.list(`${sort.ascending ? '' : '-'}${sort.column}`)
   });
 
   const { data: configHorario = { dados: { texto: '' } } } = useQuery({
@@ -55,8 +247,8 @@ export default function Pessoas() {
   });
 
   const sendEmailMutation = useMutation({
-    mutationFn: async ({ to, cc, subject, body }) => {
-      return EmailService.send({ to, cc, subject, body });
+    mutationFn: async ({ to, cc, subject, body, pessoa_id }) => {
+      return EmailService.send({ to, cc, subject, body, pessoa_id, tipo: 'AVULSO' });
     },
     onSuccess: () => {
       setEmailDialogOpen(false);
@@ -93,20 +285,30 @@ export default function Pessoas() {
     saveMutation.mutate({ ...form, foto });
   };
 
+  const handleSort = (column) => {
+    setSort(prev => ({
+      column,
+      ascending: prev.column === column ? !prev.ascending : true
+    }));
+  };
+
   const filtered = (pessoas || [])
     .filter(p => {
-      const matchSearch = !search || [p.nome, p.email, p.n_processo, p.turma].some(f => f?.toLowerCase().includes(search.toLowerCase()));
+      const searchTerms = search.toLowerCase().split(/\s+/).filter(Boolean);
+      const searchableText = [
+        p.nome,
+        p.email,
+        p.email_pessoal,
+        p.n_processo,
+        p.turma,
+        p.nif,
+        p.telefone,
+        p.ee_nome
+      ].join(' ').toLowerCase();
+
+      const matchSearch = searchTerms.length === 0 || searchTerms.every(term => searchableText.includes(term));
       const matchTipo = filtroTipo === 'todos' || p.tipo === filtroTipo;
       return matchSearch && matchTipo;
-    })
-    .sort((a, b) => {
-      // Primeiro por data de criação (descendente)
-      const dateA = new Date(a.created_at || 0);
-      const dateB = new Date(b.created_at || 0);
-      if (dateB - dateA !== 0) return dateB - dateA;
-      
-      // Segundo por nome (ascendente)
-      return (a.nome || '').localeCompare(b.nome || '');
     });
 
   return (
@@ -114,9 +316,16 @@ export default function Pessoas() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Pessoas</h1>
-          <p className="text-sm text-muted-foreground mt-1">{pessoas.length} pessoa(s) registada(s)</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            {filtered.length === (pessoas?.length || 0)
+              ? `${pessoas?.length || 0} pessoa(s) registada(s)`
+              : `${filtered.length} de ${pessoas?.length || 0} pessoa(s) (filtrado)`}
+          </p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setVerifyOpen(true)}>
+            <CheckCircle2 className="w-4 h-4 mr-2" />Verificar Ativas
+          </Button>
           <Button variant="outline" onClick={() => setImportOpen(true)}>
             <FileSpreadsheet className="w-4 h-4 mr-2" />Importar
           </Button>
@@ -148,18 +357,19 @@ export default function Pessoas() {
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/50">
-              <TableHead>Nome</TableHead>
-              <TableHead className="hidden sm:table-cell">Email</TableHead>
-              <TableHead>Tipo</TableHead>
-              <TableHead className="hidden md:table-cell">Turma</TableHead>
+              <TableHead><SortButton column="nome" currentSort={sort} onSort={handleSort} label="Nome" /></TableHead>
+              <TableHead className="hidden sm:table-cell"><SortButton column="email" currentSort={sort} onSort={handleSort} label="Email" /></TableHead>
+              <TableHead><SortButton column="nif" currentSort={sort} onSort={handleSort} label="NIF" /></TableHead>
+              <TableHead><SortButton column="tipo" currentSort={sort} onSort={handleSort} label="Tipo" /></TableHead>
+              <TableHead className="hidden md:table-cell"><SortButton column="turma" currentSort={sort} onSort={handleSort} label="Turma" /></TableHead>
               <TableHead className="text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">A carregar...</TableCell></TableRow>
+              <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">A carregar...</TableCell></TableRow>
             ) : filtered.length === 0 ? (
-              <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Nenhuma pessoa encontrada</TableCell></TableRow>
+              <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhuma pessoa encontrada</TableCell></TableRow>
             ) : (
               filtered.map(p => (
                 <TableRow key={p.id} className="hover:bg-muted/30 cursor-pointer" onClick={() => { setSelected(p); setDetailOpen(true); }}>
@@ -168,12 +378,16 @@ export default function Pessoas() {
                       {p.foto ? (
                         <img src={p.foto} className="w-8 h-8 rounded-full object-cover" />
                       ) : (
-                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">{p.nome?.[0]}</div>
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${p.ativo ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>{p.nome?.[0]}</div>
                       )}
-                      <span className="font-medium">{p.nome}</span>
+                      <div className="flex flex-col">
+                        <span className={`font-medium ${!p.ativo ? 'text-muted-foreground line-through' : ''}`}>{p.nome}</span>
+                        {!p.ativo && <span className="text-[10px] text-red-500 font-bold uppercase">Inativa</span>}
+                      </div>
                     </div>
                   </TableCell>
                   <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">{p.email}</TableCell>
+                  <TableCell className="text-sm font-mono">{p.nif || '—'}</TableCell>
                   <TableCell>
                     <Badge variant="outline" className={p.tipo === 'Aluno' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-violet-50 text-violet-700 border-violet-200'}>
                       {p.tipo}
@@ -237,7 +451,8 @@ export default function Pessoas() {
                   to: selected.email, 
                   cc,
                   subject: emailForm.assunto, 
-                  body: emailForm.corpo 
+                  body: emailForm.corpo,
+                  pessoa_id: selected.id
                 });
               }}
               disabled={sendEmailMutation.isPending || !emailForm.assunto || !emailForm.corpo}
@@ -275,7 +490,7 @@ export default function Pessoas() {
                   </div>
                 </div>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 <div>
                   <Label>Tipo *</Label>
                   <Select value={form.tipo || 'Aluno'} onValueChange={v => setForm({...form, tipo: v})}>
@@ -283,6 +498,16 @@ export default function Pessoas() {
                     <SelectContent>
                       <SelectItem value="Aluno">Aluno</SelectItem>
                       <SelectItem value="Docente">Docente</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Estado</Label>
+                  <Select value={form.ativo === false ? 'false' : 'true'} onValueChange={v => setForm({...form, ativo: v === 'true'})}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="true">Ativa</SelectItem>
+                      <SelectItem value="false">Inativa</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -324,27 +549,26 @@ export default function Pessoas() {
                   <SmartScanner onResult={v => setForm({...form, morada: v})} label="Ler Morada" mode="ocr_only" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <Label>Escalão ASE/AF</Label>
-                  <Select value={form.escalao || 'Não'} onValueChange={v => setForm({...form, escalao: v})}>
+                  <Select value={form.escalao || 'Não Beneficia'} onValueChange={v => setForm({...form, escalao: v})}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Não">Não</SelectItem>
-                      <SelectItem value="A">A</SelectItem>
-                      <SelectItem value="B">B</SelectItem>
-                      <SelectItem value="C">C</SelectItem>
-                      <SelectItem value="ASE">ASE</SelectItem>
-                      <SelectItem value="1º">1º</SelectItem>
-                      <SelectItem value="2º">2º</SelectItem>
-                      <SelectItem value="3º">3º</SelectItem>
-                      <SelectItem value="4º">4º</SelectItem>
+                      <SelectItem value="1.º Escalão">1.º Escalão</SelectItem>
+                      <SelectItem value="2.º Escalão">2.º Escalão</SelectItem>
+                      <SelectItem value="3.º Escalão">3.º Escalão</SelectItem>
+                      <SelectItem value="4.º Escalão">4.º Escalão</SelectItem>
+                      <SelectItem value="Não Beneficia">Não Beneficia</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="flex items-center space-x-2 pt-6">
-                  <Checkbox id="ne" checked={form.ne || false} onCheckedChange={v => setForm({...form, ne: v})} />
-                  <Label htmlFor="ne" className="cursor-pointer">NE (Nec. Especiais)</Label>
+                <div>
+                  <Label>Email Pessoal</Label>
+                  <div className="flex gap-2">
+                    <Input type="email" value={form.email_pessoal || ''} onChange={e => setForm({...form, email_pessoal: e.target.value})} className="flex-1" />
+                    <SmartScanner onResult={v => setForm({...form, email_pessoal: v})} label="Ler Email Pessoal" mode="ocr_only" />
+                  </div>
                 </div>
               </div>
             </div>
@@ -440,7 +664,7 @@ export default function Pessoas() {
             morada: { type: 'string' },
             n_processo: { type: 'string' },
             escalao: { type: 'string' },
-            ne: { type: 'boolean' },
+            email_pessoal: { type: 'string' },
             ee_nome: { type: 'string' },
             ee_tipo_doc: { type: 'string' },
             ee_num_doc: { type: 'string' },
@@ -450,6 +674,12 @@ export default function Pessoas() {
             ee_telefone: { type: 'string' }
           }
         }}
+      />
+
+      <ActiveVerificationDialog
+        open={verifyOpen}
+        onClose={() => setVerifyOpen(false)}
+        currentPeople={pessoas || []}
       />
     </div>
   );

@@ -1,8 +1,5 @@
 SET search_path = public;
 
--- Adicionar novos valores aos enums existentes (fora de blocos transacionais)
-ALTER TYPE devolucao_estado ADD VALUE IF NOT EXISTS 'BOM ESTADO';
-
 create extension if not exists pgcrypto;
 
 do $function$
@@ -14,16 +11,16 @@ begin
     create type pessoa_tipo as enum ('Aluno', 'Docente');
   end if;
   if not exists (select 1 from pg_type where typname = 'equipamento_estado') then
-    create type equipamento_estado as enum ('DISPONÍVEL', 'EMPRESTADO', 'EM AVARIA', 'INUTILIZADO');
+    create type equipamento_estado as enum ('Aluno', 'Docente', 'Escola', 'Extraviado', 'Inutilizado', 'Manutenção', 'Rececionado', 'Recondicionamento', 'Recuperável', 'Substituido');
   end if;
   if not exists (select 1 from pg_type where typname = 'emprestimo_estado') then
     create type emprestimo_estado as enum ('ATIVO', 'DEVOLVIDO', 'DEVOLVIDO COM AVARIA', 'DANOS PARA REVISÃO', 'PARA REVISÃO', 'ENTREGUE COM DANOS');
   end if;
   if not exists (select 1 from pg_type where typname = 'devolucao_estado') then
-    create type devolucao_estado as enum ('COM DANOS', 'A REVER', 'BOM ESTADO');
+    create type devolucao_estado as enum ('COM DANOS', 'A REVER', 'BOM ESTADO', 'OK');
   end if;
   if not exists (select 1 from pg_type where typname = 'avaria_origem') then
-    create type avaria_origem as enum ('DEVOLUÇÃO', 'DIRETA');
+    create type avaria_origem as enum ('DEVOLUÇÃO', 'DIRETA', 'IMPORTAÇÃO');
   end if;
   if not exists (select 1 from pg_type where typname = 'avaria_estado') then
     create type avaria_estado as enum ('A REVER', 'DIAGNOSTICADO', 'EM REPARAÇÃO', 'AGUARDA PEÇAS', 'ARRANJADO', 'INUTILIZADO');
@@ -111,15 +108,15 @@ create table if not exists public.utilizadores (
 create table if not exists public.pessoas (
   id uuid primary key default gen_random_uuid(),
   nome text not null,
-  email text unique,
+  email text,
   tipo pessoa_tipo not null,
   turma text,
-  nif text,
+  nif text unique,
   telefone text,
   morada text,
   n_processo text,
   escalao text,
-  ne boolean not null default false,
+  email_pessoal text,
   ee_nome text,
   ee_tipo_doc text,
   ee_num_doc text,
@@ -155,13 +152,15 @@ create table if not exists public.documento_templates (
 
 create table if not exists public.equipamentos (
   id uuid primary key default gen_random_uuid(),
-  numero_serie text not null,
+  numero_serie text not null unique,
   numero_imobilizado text,
   designacao text not null,
   tipo text not null,
   marca text,
   modelo text,
-  estado equipamento_estado not null default 'DISPONÍVEL',
+  estado equipamento_estado not null default 'Rececionado',
+  situacao_armazem text not null default 'Desconhecido',
+  historico_armazem jsonb not null default '[]'::jsonb,
   notas text,
   data_entrada date,
   documentos jsonb not null default '[]'::jsonb,
@@ -239,9 +238,35 @@ create table if not exists public.pedidos (
   )
 );
 
+create table if not exists public.historico_emails ( 
+    id uuid default gen_random_uuid() primary key, 
+    pessoa_id uuid references public.pessoas(id) on delete set null, 
+    destinatario text not null, 
+    assunto text not null, 
+    conteudo text not null, 
+    tipo text, -- Ex: 'SOLICITAR_DEVOLUCAO', 'AVULSO', etc. 
+    status text not null, -- 'SUCESSO' ou 'ERRO' 
+    erro text, -- Mensagem de erro se falhar 
+    created_at timestamp with time zone default timezone('utc'::text, now()) not null 
+); 
+
+-- Adicionar índices para performance 
+create index if not exists idx_historico_emails_pessoa_id on public.historico_emails(pessoa_id); 
+create index if not exists idx_historico_emails_created_at on public.historico_emails(created_at); 
+
+-- Habilitar RLS (Row Level Security)
+alter table public.historico_emails enable row level security; 
+
+-- Política simples: permitir tudo a utilizadores autenticados
+drop policy if exists "Permitir tudo a utilizadores autenticados" on public.historico_emails;
+create policy "Permitir tudo a utilizadores autenticados" on public.historico_emails 
+    for all using (auth.role() = 'authenticated');
+
+create sequence if not exists public.avarias_numero_seq start 1001;
+
 create table if not exists public.avarias (
   id uuid primary key default gen_random_uuid(),
-  numero_avaria int unique,
+  numero_avaria int unique default nextval('public.avarias_numero_seq'),
   equipamento_id uuid not null references public.equipamentos(id) on delete restrict,
   equipamento_info text,
   origem avaria_origem not null,
@@ -272,11 +297,15 @@ returns trigger
 as $function$
 begin
   NEW.updated_at := now();
-  return NEW;
-end;
-$function$ language plpgsql;
+    return NEW;
+  end;
+  $function$ language plpgsql;
 
-drop trigger if exists trg_utilizadores_updated_at on public.utilizadores;
+  -- Comandos para atualizar a base de dados em produção:
+  -- ALTER TYPE public.componente_estado ADD VALUE IF NOT EXISTS 'OK';
+  -- (Os componentes são guardados em JSONB, por isso não é necessária alteração de tabela)
+
+  drop trigger if exists trg_utilizadores_updated_at on public.utilizadores;
 create trigger trg_utilizadores_updated_at
 before update on public.utilizadores
 for each row execute function public.set_updated_at();
@@ -407,8 +436,10 @@ begin
   if not found then
     raise exception 'Equipamento não encontrado';
   end if;
-  if eq.estado <> 'DISPONÍVEL' then
-    raise exception 'Equipamento não está DISPONÍVEL';
+  
+  -- Se for uma importação (inserido_sistema = true), permitimos que o estado já seja Aluno/Docente
+  if not NEW.inserido_sistema and eq.estado not in ('Rececionado', 'Recondicionamento') then
+    raise exception 'Equipamento não está disponível para empréstimo (Estado: %)', eq.estado;
   end if;
 
   select * into pe from public.pessoas p where p.id = NEW.pessoa_id;
@@ -420,7 +451,28 @@ begin
   NEW.pessoa_info := coalesce(NEW.pessoa_info, pe.nome);
   NEW.criado_por_email := coalesce(NEW.criado_por_email, public.current_email());
 
-  update public.equipamentos set estado = 'EMPRESTADO'::equipamento_estado where id = NEW.equipamento_id;
+  if pe.tipo = 'Aluno' then
+    update public.equipamentos set estado = 'Aluno'::equipamento_estado where id = NEW.equipamento_id;
+  else
+    update public.equipamentos set estado = 'Docente'::equipamento_estado where id = NEW.equipamento_id;
+  end if;
+
+  -- Registo automático de SAÍDA do armazém ao emprestar (apenas se NÃO for importação)
+  if not NEW.inserido_sistema then
+    update public.equipamentos 
+    set situacao_armazem = 'Fora de armazém',
+        historico_armazem = jsonb_insert(
+          historico_armazem, 
+          '{0}', 
+          jsonb_build_object(
+            'data', to_char(now(), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+            'tipo', 'SAÍDA',
+            'utilizador', coalesce(NEW.criado_por_email, 'Sistema (Empréstimo)')
+          )
+        )
+    where id = NEW.equipamento_id;
+  end if;
+
   return NEW;
 end;
 $function$ language plpgsql;
@@ -496,7 +548,7 @@ begin
 
   if NEW.estado_equipamento = 'COM DANOS' then
     new_emp_estado := 'DANOS PARA REVISÃO';
-  elsif NEW.estado_equipamento = 'BOM ESTADO' then
+  elsif NEW.estado_equipamento = 'BOM ESTADO' or NEW.estado_equipamento = 'OK' then
     new_emp_estado := 'DEVOLVIDO';
   else
     new_emp_estado := 'PARA REVISÃO';
@@ -507,15 +559,43 @@ begin
         notas_devolucao = coalesce(notas_devolucao, NEW.notas)
     where id = NEW.emprestimo_id;
 
-  -- Se estiver em BOM ESTADO, o equipamento fica DISPONÍVEL e não criamos avaria
-  -- Nota: BOM ESTADO agora é apenas um estado final após reparação, 
-  -- mas mantemos a lógica por segurança caso seja inserido diretamente.
-  if NEW.estado_equipamento = 'BOM ESTADO' then
-    update public.equipamentos set estado = 'DISPONÍVEL'::equipamento_estado where id = NEW.equipamento_id;
+  -- Se estiver em BOM ESTADO ou OK, o equipamento fica disponível e não criamos avaria
+  if NEW.estado_equipamento = 'BOM ESTADO' or NEW.estado_equipamento = 'OK' then
+    update public.equipamentos 
+    set estado = case 
+          when NEW.estado_equipamento = 'OK' then 'Recondicionamento'::equipamento_estado 
+          else 'Rececionado'::equipamento_estado 
+        end,
+        situacao_armazem = 'Em armazém',
+        historico_armazem = jsonb_insert(
+          historico_armazem, 
+          '{0}', 
+          jsonb_build_object(
+            'data', to_char(now(), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+            'tipo', 'ENTRADA',
+            'utilizador', coalesce(NEW.criado_por_email, 'Sistema (Devolução)')
+          )
+        )
+    where id = NEW.equipamento_id;
+
     return NEW;
   end if;
 
-  update public.equipamentos set estado = 'EM AVARIA'::equipamento_estado where id = NEW.equipamento_id;
+  update public.equipamentos set estado = 'Manutenção'::equipamento_estado where id = NEW.equipamento_id;
+
+  -- Registo automático de ENTRADA no armazém ao devolver (mesmo com avaria)
+  update public.equipamentos 
+  set situacao_armazem = 'Em armazém',
+      historico_armazem = jsonb_insert(
+        historico_armazem, 
+        '{0}', 
+        jsonb_build_object(
+          'data', to_char(now(), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+          'tipo', 'ENTRADA',
+          'utilizador', coalesce(NEW.criado_por_email, 'Sistema (Devolução)')
+        )
+      )
+  where id = NEW.equipamento_id;
 
   insert into public.avarias (
     equipamento_id,
@@ -633,7 +713,7 @@ begin
 
   if NEW.estado in ('ARRANJADO', 'INUTILIZADO') then
     update public.equipamentos
-      set estado = case when NEW.estado = 'ARRANJADO' then 'DISPONÍVEL'::equipamento_estado else 'INUTILIZADO'::equipamento_estado end
+      set estado = case when NEW.estado = 'ARRANJADO' then 'Recondicionamento'::equipamento_estado else 'Inutilizado'::equipamento_estado end
       where id = NEW.equipamento_id;
   end if;
 
@@ -664,11 +744,6 @@ drop trigger if exists trg_after_update_avaria on public.avarias;
 create trigger trg_after_update_avaria
 after update on public.avarias
 for each row execute function public.after_update_avaria();
-
--- Seed Data: Tipos de Equipamento
-insert into public.tipos_equipamento (nome) 
-values ('Portátil'), ('Hotspot')
-on conflict (nome) do nothing;
 
 -- Seed Data: Utilizadores Iniciais
 insert into public.utilizadores (email, full_name, role)

@@ -380,16 +380,16 @@ export default function Configuracoes() {
         `
       },
       SOLICITAR_DEVOLUCAO: {
-        assunto: 'Pedido de devolução de equipamento',
+        assunto: 'Solicitação de Devolução de Equipamento(s)',
         corpo: `
           <div style="font-family: sans-serif; line-height: 1.6; color: #333;">
             <p>Olá <strong>{{pessoa}}</strong>,</p>
-            <p>Gostariamos de solicitar a devolução do seguinte equipamento: <strong>{{equipamento}}</strong>.</p>
-            <div style="border-left: 3px solid #d97706; padding-left: 15px; margin: 20px 0; color: #666;">
-              <strong>Contexto:</strong><br/>
-              {{motivo}}
+            <p>Vimos por este meio solicitar a devolução do(s) seguinte(s) equipamento(s) que se encontra(m) em seu poder:</p>
+            <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; margin: 15px 0;">
+              <strong>{{equipamento}}</strong>
             </div>
-            <p>Agradecemos que se dirija aos nossos serviços para proceder à entrega do material.</p>
+            <p><strong>Motivo:</strong> {{motivo}}</p>
+            <p>Agradecemos que proceda à entrega do(s) mesmo(s) com a maior brevidade possível.</p>
             <p>Obrigado pela compreensão.</p>
           </div>
         `

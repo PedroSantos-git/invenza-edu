@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Monitor, Users, UserCog, ArrowRightLeft,
-  CornerDownLeft, AlertTriangle, Menu, X, LogOut, ChevronLeft, Settings, ClipboardList
+  CornerDownLeft, AlertTriangle, Menu, X, LogOut, ChevronLeft, Settings, ClipboardList, FileSpreadsheet, BookOpen, Warehouse
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -13,8 +13,10 @@ import { PROJECT_NAME } from '@/components/layout/AppFooter';
 const navItems = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard },
   { path: '/equipamentos', label: 'Equipamentos', icon: Monitor },
+  { path: '/armazem', label: 'Armazém', icon: Warehouse },
   { path: '/pessoas', label: 'Pessoas', icon: Users },
   { path: '/pedidos', label: 'Pedidos', icon: ClipboardList },
+  { path: '/listas', label: 'Listas', icon: FileSpreadsheet },
   { path: '/emprestimos', label: 'Empréstimos', icon: ArrowRightLeft },
   { path: '/devolucoes', label: 'Devoluções', icon: CornerDownLeft },
   { path: '/avarias', label: 'Avarias', icon: AlertTriangle },
@@ -25,7 +27,7 @@ const adminItems = [
   { path: '/configuracoes', label: 'Configurações', icon: Settings },
 ];
 
-export default function Sidebar({ user, collapsed, setCollapsed }) {
+export default function Sidebar({ user, collapsed, setCollapsed, onOpenManual }) {
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const { logout } = useAuth();
@@ -87,15 +89,26 @@ export default function Sidebar({ user, collapsed, setCollapsed }) {
             </div>
           )}
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={logout}
-          className={cn("w-full mt-2 text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/50", collapsed && "px-2")}
-        >
-          <LogOut className="w-4 h-4 flex-shrink-0" />
-          {!collapsed && <span className="ml-2">Sair</span>}
-        </Button>
+        <div className="grid grid-cols-1 gap-1 mt-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onOpenManual}
+            className={cn("w-full justify-start text-sidebar-foreground/60 hover:text-primary hover:bg-primary/5", collapsed && "justify-center px-2")}
+          >
+            <BookOpen className="w-4 h-4 flex-shrink-0" />
+            {!collapsed && <span className="ml-2">Ajuda</span>}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={logout}
+            className={cn("w-full justify-start text-sidebar-foreground/60 hover:text-destructive hover:bg-destructive/5", collapsed && "justify-center px-2")}
+          >
+            <LogOut className="w-4 h-4 flex-shrink-0" />
+            {!collapsed && <span className="ml-2">Sair</span>}
+          </Button>
+        </div>
       </div>
     </div>
   );

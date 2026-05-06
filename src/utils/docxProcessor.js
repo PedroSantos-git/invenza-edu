@@ -75,7 +75,18 @@ export const DocxProcessor = {
       const doc = new Docxtemplater(zip, {
         paragraphLoop: true,
         linebreaks: true,
-        modules: [imageModule]
+        modules: [imageModule],
+        parser: (tag) => {
+          return {
+            get(scope) {
+              let value = scope[tag];
+              if (typeof value === 'string' && value.startsWith('BOLD:')) {
+                return value.replace('BOLD:', '');
+              }
+              return value;
+            }
+          };
+        }
       });
 
       doc.render(data);

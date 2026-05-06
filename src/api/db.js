@@ -3,7 +3,7 @@ import { supabase } from '@/api/supabaseClient';
 const CREATED_AT_ALIASES = new Set(['created_date', 'created_at', 'data_registo', 'data_criacao']);
 const DEFAULT_BATCH_SIZE = 1000;
 
-const requireSupabase = () => {
+export const requireSupabase = () => {
   if (!supabase) {
     throw new Error('Supabase não configurado. Define VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.');
   }
@@ -35,6 +35,7 @@ const maybeSingle = async (query) => {
 const fetchPaged = async (buildQuery, { limit = null, batchSize = DEFAULT_BATCH_SIZE } = {}) => {
   const all = [];
   let from = 0;
+  const seenIds = new Set();
 
   while (true) {
     const remaining = typeof limit === 'number' && limit > 0 ? Math.max(limit - all.length, 0) : null;
@@ -46,7 +47,18 @@ const fetchPaged = async (buildQuery, { limit = null, batchSize = DEFAULT_BATCH_
     if (error) throw error;
 
     const rows = data ?? [];
-    all.push(...rows);
+    
+    // Deduplicação por ID para evitar problemas de "shifting" em paginação por offset
+    for (const row of rows) {
+      if (row.id) {
+        if (!seenIds.has(row.id)) {
+          seenIds.add(row.id);
+          all.push(row);
+        }
+      } else {
+        all.push(row);
+      }
+    }
 
     if (rows.length < pageSize) break;
     from += pageSize;
@@ -63,7 +75,14 @@ const entity = (table) => {
       return fetchPaged(
         () => {
           let q = sb.from(table).select('*');
-          if (order) q = q.order(order.column, { ascending: order.ascending, nullsFirst: false });
+          if (order) {
+            q = q.order(order.column, { ascending: order.ascending, nullsFirst: false });
+            // Adicionar ordenação secundária por ID para garantir que a paginação seja estável
+            if (order.column !== 'id') q = q.order('id', { ascending: true });
+          } else {
+            // Garantir ordenação estável por padrão
+            q = q.order('id', { ascending: true });
+          }
           return q;
         },
         { limit }
@@ -85,7 +104,14 @@ const entity = (table) => {
               q = q.eq(key, value);
             }
           }
-          if (order) q = q.order(order.column, { ascending: order.ascending, nullsFirst: false });
+          if (order) {
+            q = q.order(order.column, { ascending: order.ascending, nullsFirst: false });
+            // Adicionar ordenação secundária por ID para garantir que a paginação seja estável
+            if (order.column !== 'id') q = q.order('id', { ascending: true });
+          } else {
+            // Garantir ordenação estável por padrão
+            q = q.order('id', { ascending: true });
+          }
           return q;
         },
         { limit }
@@ -99,9 +125,13 @@ const entity = (table) => {
     },
     create: async (payload) => {
       const sb = requireSupabase();
-      const { data, error } = await sb.from(table).insert(payload).select('*').single();
-      if (error) throw error;
-      return data;
+      console.log(`DB Create [${table}]:`, payload);
+      const { data, error } = await sb.from(table).insert(payload).select('*');
+      if (error) {
+        console.error(`DB Error [${table}]:`, error);
+        throw error;
+      }
+      return data?.[0] || data;
     },
     update: async (id, payload) => {
       const sb = requireSupabase();
@@ -127,6 +157,12 @@ const entity = (table) => {
       if (error) throw error;
       return data ?? [];
     },
+    bulkUpsert: async (items, onConflict = 'id') => {
+      const sb = requireSupabase();
+      const { data, error } = await sb.from(table).upsert(items, { onConflict }).select('*');
+      if (error) throw error;
+      return data ?? [];
+    },
     maybeByEmail: async (email) => {
       const sb = requireSupabase();
       const q = sb.from(table).select('*').eq('email', email).limit(1);
@@ -139,7 +175,7 @@ const entity = (table) => {
 };
 
 const uploadFile = async ({ file, folder = undefined }) => {
-  const response = await fetch('/.netlify/functions/r2-presign-upload', {
+  const response = await fetch('/api/r2-presign-upload', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
@@ -151,18 +187,27 @@ const uploadFile = async ({ file, folder = undefined }) => {
 
   if (!response.ok) {
     const text = await response.text().catch(() => '');
-    throw new Error(`Falha ao preparar upload (R2): ${text || response.status}`);
+    throw new Error(`Falha ao preparar upload: ${text || response.status}`);
   }
 
   const { uploadUrl, publicUrl } = await response.json();
   if (!uploadUrl || !publicUrl) {
-    throw new Error('Resposta inválida do servidor (R2)');
+    throw new Error('Resposta inválida do servidor');
+  }
+
+  let finalPublicUrl = publicUrl;
+  const publicBase = import.meta.env.VITE_R2_PUBLIC_BASE_URL || 'https://pub-4cbbe5af7c524dd28f987efcd59b6463.r2.dev';
+
+  // Forçar reparação se o backend devolver a URL interna do Cloudflare
+  if (finalPublicUrl.includes('r2.cloudflarestorage.com')) {
+    const urlObj = new URL(finalPublicUrl);
+    finalPublicUrl = `${publicBase.replace(/\/+$/, '')}${urlObj.pathname}`;
   }
 
   const put = await fetch(uploadUrl, {
     method: 'PUT',
     headers: {
-      'content-type': file?.type || 'application/octet-stream',
+      'Content-Type': file?.type || 'application/octet-stream',
     },
     body: file,
   });
@@ -172,10 +217,11 @@ const uploadFile = async ({ file, folder = undefined }) => {
     throw new Error(`Falha no upload para R2: ${text || put.status}`);
   }
 
-  return { file_url: publicUrl };
+  return { file_url: finalPublicUrl };
 };
 
 export const db = {
+  get client() { return requireSupabase(); },
   auth: {
     signInWithGoogle: async (redirectTo) => {
       const sb = requireSupabase();
@@ -196,7 +242,10 @@ export const db = {
   entities: {
     Equipamento: entity('equipamentos'),
     Pessoa: entity('pessoas'),
-    Emprestimo: entity('emprestimos'),
+    Emprestimo: {
+      ...entity('emprestimos'),
+      list: (sort) => entity('emprestimos').list(sort, '*, devolucao:devolucoes(*)')
+    },
     Devolucao: entity('devolucoes'),
     Avaria: entity('avarias'),
     TipoEquipamento: entity('tipos_equipamento'),
@@ -205,22 +254,23 @@ export const db = {
     Pedido: entity('pedidos'),
     Configuracao: entity('configuracoes'),
     EmailTemplate: entity('email_templates'),
+    EmailHistorico: entity('historico_emails'),
   },
   integrations: {
     Core: {
       UploadFile: uploadFile,
       ListFiles: async () => {
-        const response = await fetch('/.netlify/functions/r2-manage', { method: 'GET' });
-        if (!response.ok) throw new Error('Falha ao listar ficheiros no R2');
+        const response = await fetch('/api/r2-manage', { method: 'GET' });
+        if (!response.ok) throw new Error('Falha ao listar ficheiros');
         return response.json();
       },
       DeleteFiles: async (keys) => {
-        const response = await fetch('/.netlify/functions/r2-manage', {
+        const response = await fetch('/api/r2-manage', {
           method: 'DELETE',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ keys }),
         });
-        if (!response.ok) throw new Error('Falha ao eliminar ficheiros no R2');
+        if (!response.ok) throw new Error('Falha ao eliminar ficheiros');
         return response.json();
       }
     },

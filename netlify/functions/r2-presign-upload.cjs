@@ -36,6 +36,8 @@ exports.handler = async (event) => {
     const accessKeyId = getRequiredEnv('R2_ACCESS_KEY_ID');
     const secretAccessKey = getRequiredEnv('R2_SECRET_ACCESS_KEY');
     const bucket = getRequiredEnv('R2_BUCKET');
+    // IMPORTANTE: R2_PUBLIC_BASE_URL deve ser a URL pública do bucket (ex: https://pub-xxx.r2.dev)
+    // NÃO deve ser o endpoint da API S3 (https://xxx.r2.cloudflarestorage.com)
     const publicBaseUrl = getRequiredEnv('R2_PUBLIC_BASE_URL').replace(/\/+$/, '');
 
     const payload = event.body ? JSON.parse(event.body) : {};

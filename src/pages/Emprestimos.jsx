@@ -11,24 +11,78 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
-import { Search, Plus, FileDown, Mail, Loader2 } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
+import { Search, Plus, FileDown, Mail, Loader2, ArrowUpDown, ArrowUp, ArrowDown, FileText, Upload, Download } from 'lucide-react';
 import StatusBadge from '@/components/shared/StatusBadge';
 import PageHeader from '@/components/shared/PageHeader';
 import FileUpload from '@/components/shared/FileUpload';
+import DocumentViewer from '@/components/shared/DocumentViewer';
 import AcessoriosCheck from '@/components/shared/AcessoriosCheck';
 import SmartScanner from '@/components/shared/SmartScanner';
 import RichTextEditor from '@/components/shared/RichTextEditor';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
-import { gerarPDFEmprestimo } from '@/utils/pdfGenerator';
+import { useNavigate } from 'react-router-dom';
+import { gerarPDFEmprestimo, gerarRelatorioImportacaoPDF } from '@/utils/pdfGenerator';
 import { useAuth } from '@/lib/AuthContext';
+import mammoth from 'mammoth';
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
 
 const PROTECTED_EMAIL = 'pedro.mf.santos@outlook.pt';
+
+function damerauLevenshtein(a, b) {
+  if (!a || !b) return 99;
+  const n = a.length;
+  const m = b.length;
+  const matrix = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+
+  for (let i = 0; i <= n; i++) matrix[i][0] = i;
+  for (let j = 0; j <= m; j++) matrix[0][j] = j;
+
+  for (let i = 1; i <= n; i++) {
+    for (let j = 1; j <= m; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,      // Deletion
+        matrix[i][j - 1] + 1,      // Insertion
+        matrix[i - 1][j - 1] + cost // Substitution
+      );
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
+        matrix[i][j] = Math.min(matrix[i][j], matrix[i - 2][j - 2] + cost); // Transposition
+      }
+    }
+  }
+  return matrix[n][m];
+}
+
+const SortButton = ({ column, currentSort, onSort, label }) => {
+  const isSorted = currentSort.column === column;
+  return (
+    <Button 
+      variant="ghost" 
+      size="sm" 
+      className="-ml-3 h-8 data-[state=open]:bg-accent"
+      onClick={() => onSort(column)}
+    >
+      <span>{label}</span>
+      {isSorted ? (
+        currentSort.ascending ? (
+          <ArrowUp className="ml-2 h-4 w-4" />
+        ) : (
+          <ArrowDown className="ml-2 h-4 w-4" />
+        )
+      ) : (
+        <ArrowUpDown className="ml-2 h-4 w-4 opacity-0 group-hover:opacity-100" />
+      )}
+    </Button>
+  );
+};
 
 // Inline mini forms for creating equipment/person
 function MiniEquipamentoForm({ onCreated, onCancel }) {
   const qc = useQueryClient();
-  const [form, setForm] = useState({ designacao: '', numero_serie: '', numero_imobilizado: '', marca: '', modelo: '', tipo: 'Portátil', estado: 'DISPONÍVEL', documentos: [] });
+  const [form, setForm] = useState({ designacao: '', numero_serie: '', numero_imobilizado: '', marca: '', modelo: '', tipo: 'Portátil', estado: 'Rececionado', documentos: [] });
   const { data: tipos = [] } = useQuery({ queryKey: ['tipos-equipamento'], queryFn: () => db.entities.TipoEquipamento.list() });
   const tiposAtivos = tipos.filter(t => t.ativo !== false);
   const mut = useMutation({
@@ -96,11 +150,14 @@ function MiniPessoaForm({ onCreated, onCancel }) {
 
 export default function Emprestimos() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const isAdmin = user?.email === PROTECTED_EMAIL || user?.role === 'admin';
 
-  const [search, setSearch] = useState('');
-  const [filtroEstado, setFiltroEstado] = useState('ATIVO');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedEmp, setSelectedEmp] = useState(null);
+  const [selectedDoc, setSelectedDoc] = useState(null);
+  const [sort, setSort] = useState({ column: 'created_at', ascending: false });
   const [formOpen, setFormOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailItem, setDetailItem] = useState(null);
@@ -121,13 +178,24 @@ export default function Emprestimos() {
   const [eeLevanta, setEeLevanta] = useState(false);
   const [inseridoSistema, setInseridoSistema] = useState(false);
   const [step, setStep] = useState(1);
+  const [editMode, setEditOpen] = useState(false);
+  const [editForm, setEditForm] = useState({});
+  const [importing, setImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState(0);
+  const [importSummary, setImportSummary] = useState(null);
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const [pendingSuggestions, setPendingSuggestions] = useState([]);
 
   const { data: emprestimos = [], isLoading } = useQuery({
-    queryKey: ['emprestimos'],
-    queryFn: () => db.entities.Emprestimo.list('-created_at')
+    queryKey: ['emprestimos', sort],
+    queryFn: () => db.entities.Emprestimo.list(`${sort.ascending ? '' : '-'}${sort.column}`)
   });
-  const { data: equipamentos = [] } = useQuery({
-    queryKey: ['equipamentos'], queryFn: () => db.entities.Equipamento.list()
+  const { data: equipamentosDisponiveis = [] } = useQuery({
+    queryKey: ['equipamentos', 'disponiveis'], 
+    queryFn: () => db.entities.Equipamento.filter({ estado: ['Rececionado', 'Recondicionamento'] })
+  });
+  const { data: equipamentosTodos = [] } = useQuery({
+    queryKey: ['equipamentos', 'todos'], queryFn: () => db.entities.Equipamento.list()
   });
   const { data: pessoas = [] } = useQuery({
     queryKey: ['pessoas'], queryFn: () => db.entities.Pessoa.list()
@@ -138,10 +206,11 @@ export default function Emprestimos() {
 
   const createMutation = useMutation({
     mutationFn: async () => {
+      const eqNome = `${selectedEq.tipo} ${selectedEq.marca} ${selectedEq.modelo}`.trim() || selectedEq.designacao;
       const emp = await db.entities.Emprestimo.create({
         equipamento_id: selectedEq.id,
         pessoa_id: selectedPessoa.id,
-        equipamento_info: `${selectedEq.designacao} (${selectedEq.numero_serie})`,
+        equipamento_info: eqNome,
         pessoa_info: selectedPessoa.nome,
         data_emprestimo: new Date().toISOString().split('T')[0],
         estado: 'ATIVO',
@@ -152,16 +221,18 @@ export default function Emprestimos() {
         inserido_sistema: inseridoSistema,
         documentos_entrega: docs
       });
-      await db.entities.Equipamento.update(selectedEq.id, { estado: 'EMPRESTADO' });
+      const estadoEquipamento = selectedPessoa.tipo === 'Aluno' ? 'Aluno' : 'Docente';
+      await db.entities.Equipamento.update(selectedEq.id, { estado: estadoEquipamento });
       return emp;
     },
     onSuccess: (emp) => {
       qc.invalidateQueries({ queryKey: ['emprestimos'] });
       qc.invalidateQueries({ queryKey: ['equipamentos'] });
       // Auto PDF
+      const eqNome = `${selectedEq.tipo} ${selectedEq.marca} ${selectedEq.modelo}`.trim() || selectedEq.designacao;
       gerarPDFEmprestimo({
         ...emp,
-        equipamento_info: `${selectedEq.designacao} (${selectedEq.numero_serie})`,
+        equipamento_info: eqNome,
         pessoa_info: selectedPessoa.nome,
         acessorios_entregues: acessorios,
         notas_entrega: notas
@@ -182,6 +253,7 @@ export default function Emprestimos() {
         tipo: 'SOLICITAR_DEVOLUCAO',
         to: pessoa.email,
         cc,
+        pessoa_id: pessoa.id,
         vars: {
           pessoa: pessoa.nome,
           equipamento: emp.equipamento_info,
@@ -196,6 +268,32 @@ export default function Emprestimos() {
     },
     onError: (err) => {
       toast.error('Erro ao enviar pedido: ' + err.message);
+    }
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }) => {
+      // Se tivermos devolucao_id, estamos a editar dados da devolução
+      if (data.devolucao_id) {
+        const { devolucao_id, acessorios_devolvidos, notas_devolucao, documentos_devolucao } = data;
+        await db.entities.Devolucao.update(devolucao_id, {
+          acessorios_devolvidos,
+          notas: notas_devolucao,
+          documentos: documentos_devolucao
+        });
+      }
+
+      // Atualizar sempre o empréstimo (campos de entrega ou espelho da devolução)
+      return await db.entities.Emprestimo.update(id, data);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['emprestimos'] });
+      setEditOpen(false);
+      setDetailOpen(false);
+      toast.success('Alterações gravadas com sucesso');
+    },
+    onError: (err) => {
+      toast.error('Erro ao atualizar: ' + err.message);
     }
   });
 
@@ -216,36 +314,423 @@ export default function Emprestimos() {
     setCreatePessoa(false);
   };
 
-  const filteredEq = equipamentos.filter(e =>
-    e.estado === 'DISPONÍVEL' &&
-    (eqSearch === '' || [e.numero_serie, e.numero_imobilizado, e.designacao, e.marca, e.modelo].some(f => f?.toLowerCase().includes(eqSearch.toLowerCase())))
+  const handleSort = (column) => {
+    setSort(prev => ({
+      column,
+      ascending: prev.column === column ? !prev.ascending : true
+    }));
+  };
+
+  const equipamentoById = React.useMemo(
+    () => new Map((equipamentosTodos || []).map(eq => [eq.id, eq])),
+    [equipamentosTodos]
+  );
+
+  const pessoaById = React.useMemo(
+    () => new Map((pessoas || []).map(p => [p.id, p])),
+    [pessoas]
+  );
+
+  const formatEquipamento = (eq) => {
+    if (!eq) return '';
+    const parts = [eq.tipo, eq.marca, eq.modelo].filter(Boolean);
+    return parts.join(' ').trim();
+  };
+
+  const emprestimosDecorados = (emprestimos || []).map(emp => {
+    const eq = equipamentoById.get(emp.equipamento_id);
+    const pessoa = pessoaById.get(emp.pessoa_id);
+    const equipamentoLabel = formatEquipamento(eq) || emp.equipamento_info || emp.designacao || '—';
+    const equipamentoSn = eq?.numero_serie || emp.equipamento_sn || emp.numero_serie || '—';
+    const pessoaNome = pessoa?.nome || emp.pessoa_info || '—';
+    const pessoaNif = pessoa?.nif || emp.pessoa_nif || emp.nif || '—';
+    const devolucao = emp.devolucao?.[0];
+    const devolucao_id = devolucao?.id;
+    const acessorios_devolvidos = devolucao?.acessorios_devolvidos || {};
+    const devolucao_notas = devolucao?.notas || '';
+    const devolucao_documentos = devolucao?.documentos || [];
+    
+    return { 
+      ...emp, 
+      equipamentoLabel, 
+      equipamentoSn, 
+      pessoaNome, 
+      pessoaNif, 
+      devolucao_id,
+      acessorios_devolvidos,
+      devolucao_notas,
+      devolucao_documentos
+    };
+  });
+
+  const filteredEq = equipamentosDisponiveis.filter(e =>
+    eqSearch === '' || [e.numero_serie, e.numero_imobilizado, e.designacao, e.marca, e.modelo].some(f => f?.toLowerCase().includes(eqSearch.toLowerCase()))
   );
 
   const filteredPessoas = pessoas.filter(p =>
-    p.ativo !== false &&
     (pessoaSearch === '' || [p.nome, p.email, p.turma, p.nif, p.telefone].some(f => f?.toLowerCase().includes(pessoaSearch.toLowerCase())))
   );
 
-  const filtered = (emprestimos || [])
+  const filtered = (emprestimosDecorados || [])
     .filter(e => {
-      const matchSearch = !search || [e.equipamento_info, e.pessoa_info].some(f => f?.toLowerCase().includes(search.toLowerCase()));
+      const matchSearch = !search || [
+        e.equipamentoLabel,
+        e.equipamentoSn,
+        e.pessoaNome,
+        e.pessoaNif
+      ].some(f => f?.toLowerCase().includes(search.toLowerCase()));
       const matchEstado = filtroEstado === 'todos' || e.estado === filtroEstado;
       return matchSearch && matchEstado;
-    })
-    .sort((a, b) => {
-      const dateA = new Date(a.created_at || 0);
-      const dateB = new Date(b.created_at || 0);
-      return dateB - dateA;
     });
 
+  const handleImportAuto = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    setImporting(true);
+    setImportProgress(0);
+    const toastId = toast.loading(`A processar ${files.length} documento(s)...`);
+    const results = {
+      sucesso: [],
+      sugestoes: [],
+      falhas: [], // Ficheiros para o ZIP
+      erro: {
+        'Equipamento não encontrado': [],
+        'Pessoa não encontrada': [],
+        'Estado inválido': [],
+        'Já possui empréstimo ativo (Outra Pessoa)': [],
+        'Já importado (Mesma Pessoa)': [],
+        'Erro na leitura do documento': [],
+        'Outros erros': []
+      }
+    };
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      setImportProgress(Math.round(((i) / files.length) * 100));
+      let sn = '?';
+      let nifFinal = '?';
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const result = await mammoth.extractRawText({ arrayBuffer });
+        const text = result.value;
+
+        // Extrair S/N (ex: CND5041MWY)
+        const snMatch = text.match(/N\.º de série do computador n\.º\s+([A-Z0-9]+)/i) || 
+                        text.match(/N\.º de série\s+([A-Z0-9]+)/i) ||
+                        text.match(/S\/N:?\s+([A-Z0-9]+)/i);
+        
+        // Extrair NIF do aluno (9 dígitos)
+        const nifMatches = Array.from(text.matchAll(/\b\d{9}\b/g)).map(m => m[0]);
+        const alunoNifMatch = text.match(/aluno[\s\S]+?com\s+o\s+NIF\s+(\d{9})/i);
+        nifFinal = alunoNifMatch ? alunoNifMatch[1] : (nifMatches.length >= 2 ? nifMatches[1] : nifMatches[0]);
+
+        sn = snMatch ? snMatch[1].trim() : null;
+
+        if (!sn || !nifFinal) {
+          results.erro['Erro na leitura do documento'].push({ file: file.name, detail: `SN=${sn || '?'}, NIF=${nifFinal || '?'}` });
+          results.falhas.push({ file, sn: sn || '?', nif: nifFinal || '?' });
+          continue;
+        }
+
+        // 1. Procurar Pessoa primeiro
+        const { data: ps } = await db.client
+          .from('pessoas')
+          .select('*')
+          .eq('nif', nifFinal);
+
+        if (!ps || ps.length === 0) {
+          results.erro['Pessoa não encontrada'].push({ file: file.name, detail: nifFinal });
+          results.falhas.push({ file, sn, nif: nifFinal });
+          continue;
+        }
+        const pessoa = ps[0];
+
+        // 2. Procurar Equipamento
+        const { data: eqs } = await db.client
+          .from('equipamentos')
+          .select('*')
+          .or(`numero_serie.eq.${sn},numero_imobilizado.eq.${sn}`);
+
+        let eq = eqs?.[0];
+        let isSimilar = false;
+
+        if (!eq) {
+          // Busca aproximada (typo ou troca de letras)
+          // Aumentado para distância 2 (dois caracteres errados)
+          eq = (equipamentosTodos || []).find(e => 
+            damerauLevenshtein(e.numero_serie, sn) <= 2 || 
+            damerauLevenshtein(e.numero_imobilizado, sn) <= 2
+          );
+          if (eq) isSimilar = true;
+        }
+
+        if (!eq) {
+          results.erro['Equipamento não encontrado'].push({ file: file.name, detail: sn });
+          results.falhas.push({ file, sn, nif: nifFinal });
+          continue;
+        }
+
+        // Validar Estado do Equipamento (Pode ser o exato ou o similar encontrado)
+        const estadosPermitidos = ['Escola', 'Recondicionamento', 'Rececionado'];
+        
+        if (eq.estado === 'Aluno' || eq.estado === 'Docente') {
+          // Verificar se o empréstimo ativo é para esta pessoa
+          const { data: empAtivo } = await db.client
+            .from('emprestimos')
+            .select('*')
+            .eq('equipamento_id', eq.id)
+            .eq('estado', 'ATIVO')
+            .maybeSingle();
+
+          if (empAtivo && empAtivo.pessoa_id === pessoa.id) {
+            // JÁ IMPORTADO (Mesmo que tenha sido por sugestão anteriormente)
+            const temAuto = empAtivo.documentos_entrega?.some(d => d.nome.startsWith('Auto_Entrega_'));
+            if (!temAuto) {
+              try {
+                const { file_url } = await db.integrations.Core.UploadFile({ 
+                  file, 
+                  folder: 'autos' 
+                });
+                const novoDoc = { 
+                  nome: `Auto_Entrega_${eq.numero_serie}_${pessoa.nome.replace(/\s+/g, '_')}.docx`, 
+                  url: file_url, 
+                  ativo: true 
+                };
+                await db.entities.Emprestimo.update(empAtivo.id, {
+                  documentos_entrega: [...(empAtivo.documentos_entrega || []), novoDoc]
+                });
+              } catch (upErr) {
+                console.error('Erro no auto-upload para empréstimo existente:', upErr);
+              }
+            }
+            results.erro['Já importado (Mesma Pessoa)'].push({ 
+              file: file.name, 
+              detail: `${isSimilar ? '(S/N Aproximado) ' : ''}${eq.numero_serie} -> ${pessoa.nome}` 
+            });
+            continue;
+          } else {
+            results.erro['Já possui empréstimo ativo (Outra Pessoa)'].push({ file: file.name, detail: `${eq.numero_serie} (Ativo com outro utilizador)` });
+            results.falhas.push({ file, sn, nif: nifFinal });
+            continue;
+          }
+        }
+
+        // Se chegámos aqui e é similar, então é uma sugestão de novo empréstimo
+        if (isSimilar) {
+          results.sugestoes.push({ 
+            file: file.name, 
+            fileBlob: file,
+            snOriginal: sn, 
+            snSugerido: eq.numero_serie,
+            eq: eq,
+            pessoa: pessoa
+          });
+          continue;
+        }
+
+        if (!estadosPermitidos.includes(eq.estado)) {
+          results.erro['Estado inválido'].push({ file: file.name, detail: `${sn} (${eq.estado})` });
+          results.falhas.push({ file, sn, nif: nifFinal });
+          continue;
+        }
+
+        // 3. Criar Empréstimo
+        const eqNome = `${eq.tipo} ${eq.marca} ${eq.modelo}`.trim() || eq.designacao;
+        
+        // Fazer Upload do ficheiro primeiro
+        let documentos_entrega = [];
+        try {
+          const { file_url } = await db.integrations.Core.UploadFile({ 
+            file, 
+            folder: 'autos' 
+          });
+          documentos_entrega.push({ 
+            nome: `Auto_Entrega_${sn}_${pessoa.nome.replace(/\s+/g, '_')}.docx`, 
+            url: file_url, 
+            ativo: true 
+          });
+        } catch (upErr) {
+          console.error('Erro no auto-upload:', upErr);
+        }
+
+        const novoEmp = {
+          equipamento_id: eq.id,
+          pessoa_id: pessoa.id,
+          equipamento_info: eqNome,
+          pessoa_info: pessoa.nome,
+          data_emprestimo: new Date().toISOString().split('T')[0],
+          estado: 'ATIVO',
+          notas_entrega: 'Auto provisório',
+          acessorios_entregues: { 'Mochila': true, 'Transformador': true },
+          autorizacao_ee: true,
+          ee_levanta: true,
+          inserido_sistema: true,
+          documentos_entrega
+        };
+
+        try {
+          await db.entities.Emprestimo.create(novoEmp);
+          
+          // Atualizar estado do equipamento
+          const novoEstado = pessoa.tipo === 'Aluno' ? 'Aluno' : 'Docente';
+          await db.entities.Equipamento.update(eq.id, { estado: novoEstado });
+          
+          results.sucesso.push({ file: file.name, detail: `${sn} -> ${pessoa.nome}` });
+        } catch (dbErr) {
+          results.erro['Outros erros'].push({ file: file.name, detail: dbErr.message });
+          results.falhas.push({ file, sn, nif: nifFinal });
+        }
+      } catch (err) {
+        console.error(`Erro ao importar ${file.name}:`, err);
+        results.erro['Outros erros'].push({ file: file.name, detail: err.message });
+        results.falhas.push({ file, sn, nif: nifFinal });
+      }
+    }
+
+    setImportProgress(100);
+    qc.invalidateQueries({ queryKey: ['emprestimos'] });
+    qc.invalidateQueries({ queryKey: ['equipamentos'] });
+    
+    setImportSummary(results);
+    setSummaryOpen(true);
+    setImporting(false);
+    setImportProgress(0);
+    toast.success('Processamento concluído', { id: toastId });
+    e.target.value = ''; // Reset input
+  };
+
+  const handleConfirmSuggestion = async (sug, index) => {
+    const toastId = toast.loading('A criar empréstimo sugerido...');
+    try {
+      const eqNome = `${sug.eq.tipo} ${sug.eq.marca} ${sug.eq.modelo}`.trim() || sug.eq.designacao;
+      
+      // Fazer Upload do ficheiro para a sugestão também
+      let documentos_entrega = [];
+      try {
+        const { file_url } = await db.integrations.Core.UploadFile({ 
+          file: sug.fileBlob, 
+          folder: 'autos' 
+        });
+        documentos_entrega.push({ 
+          nome: `Auto_Entrega_${sug.snSugerido}_${sug.pessoa.nome.replace(/\s+/g, '_')}.docx`, 
+          url: file_url, 
+          ativo: true 
+        });
+      } catch (upErr) {
+        console.error('Erro no auto-upload da sugestão:', upErr);
+      }
+
+      const novoEmp = {
+        equipamento_id: sug.eq.id,
+        pessoa_id: sug.pessoa.id,
+        equipamento_info: eqNome,
+        pessoa_info: sug.pessoa.nome,
+        data_emprestimo: new Date().toISOString().split('T')[0],
+        estado: 'ATIVO',
+        notas_entrega: `Auto provisório (S/N corrigido na importação: ${sug.snOriginal} -> ${sug.snSugerido})`,
+        acessorios_entregues: { 'Mochila': true, 'Transformador': true },
+        autorizacao_ee: true,
+        ee_levanta: true,
+        inserido_sistema: true,
+        documentos_entrega
+      };
+
+      await db.entities.Emprestimo.create(novoEmp);
+      const novoEstado = sug.pessoa.tipo === 'Aluno' ? 'Aluno' : 'Docente';
+      await db.entities.Equipamento.update(sug.eq.id, { estado: novoEstado });
+
+      setImportSummary(prev => {
+        const newSugestoes = [...prev.sugestoes];
+        newSugestoes.splice(index, 1);
+        return {
+          ...prev,
+          sucesso: [...prev.sucesso, { file: sug.file, detail: `${sug.snSugerido} -> ${sug.pessoa.nome} (Corrigido)` }],
+          sugestoes: newSugestoes
+        };
+      });
+
+      qc.invalidateQueries({ queryKey: ['emprestimos'] });
+      qc.invalidateQueries({ queryKey: ['equipamentos'] });
+      toast.success('Empréstimo criado com sucesso', { id: toastId });
+    } catch (err) {
+      toast.error('Erro ao confirmar sugestão: ' + err.message, { id: toastId });
+    }
+  };
+
+  const downloadFailedZip = async () => {
+    if (!importSummary?.falhas?.length) return;
+    
+    const zip = new JSZip();
+    importSummary.falhas.forEach(item => {
+      const prefix = `${item.sn}_${item.nif}_`;
+      zip.file(prefix + item.file.name, item.file);
+    });
+    
+    const content = await zip.generateAsync({ type: 'blob' });
+    saveAs(content, `Autos_Nao_Importados_${format(new Date(), 'yyyyMMdd_HHmm')}.zip`);
+    toast.success('ZIP gerado com sucesso');
+  };
+
   const handlePDF = (emp, e) => {
-    e.stopPropagation();
+    if (e) e.stopPropagation();
     gerarPDFEmprestimo(emp, pdfTemplates);
+  };
+
+  const handleEdit = (emp) => {
+    setEditForm({
+      id: emp.id,
+      acessorios_entregues: emp.acessorios_entregues || {},
+      autorizacao_ee: emp.autorizacao_ee || false,
+      ee_levanta: emp.ee_levanta || false,
+      inserido_sistema: emp.inserido_sistema || false,
+      notas_entrega: emp.notas_entrega || '',
+      documentos_entrega: emp.documentos_entrega || [],
+      // Campos de devolução
+      devolucao_id: emp.devolucao_id,
+      acessorios_devolvidos: emp.acessorios_devolvidos || {},
+      notas_devolucao: emp.notas_devolucao || emp.devolucao_notas || '',
+      documentos_devolucao: emp.documentos_devolucao || emp.devolucao_documentos || []
+    });
+    setEditOpen(true);
   };
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Empréstimos" subtitle={`${emprestimos.filter(e => e.estado === 'ATIVO').length} empréstimo(s) ativo(s)`} action={() => setFormOpen(true)} actionLabel="Novo Empréstimo" />
+      <PageHeader 
+        title="Empréstimos" 
+        subtitle={
+          filtered.length === emprestimos.length
+            ? `${emprestimos.filter(e => e.estado === 'ATIVO').length} empréstimo(s) ativo(s)`
+            : `${filtered.length} de ${emprestimos.length} empréstimo(s) (filtrado)`
+        } 
+        action={() => setFormOpen(true)} 
+        actionLabel="Novo Empréstimo" 
+      >
+        <div className="flex gap-2">
+          <input
+            type="file"
+            id="import-auto"
+            className="hidden"
+            accept=".docx"
+            multiple
+            onChange={handleImportAuto}
+            disabled={importing}
+          />
+          <Button 
+            variant="outline" 
+            onClick={() => document.getElementById('import-auto').click()}
+            disabled={importing}
+          >
+            {importing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
+            Importar Auto
+          </Button>
+          <Button variant="outline" onClick={() => navigate('/notificacoes-devolucao')}>
+            <Mail className="w-4 h-4 mr-2" />
+            Notificações
+          </Button>
+        </div>
+      </PageHeader>
 
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1 flex gap-2">
@@ -269,23 +754,27 @@ export default function Emprestimos() {
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/50">
-              <TableHead>Equipamento</TableHead>
-              <TableHead>Pessoa</TableHead>
-              <TableHead className="hidden sm:table-cell">Data</TableHead>
-              <TableHead>Estado</TableHead>
+              <TableHead><SortButton column="equipamento_info" currentSort={sort} onSort={handleSort} label="Equipamento" /></TableHead>
+              <TableHead><SortButton column="equipamento_sn" currentSort={sort} onSort={handleSort} label="Nº Série" /></TableHead>
+              <TableHead><SortButton column="pessoa_info" currentSort={sort} onSort={handleSort} label="Pessoa" /></TableHead>
+              <TableHead><SortButton column="pessoa_nif" currentSort={sort} onSort={handleSort} label="NIF" /></TableHead>
+              <TableHead className="hidden sm:table-cell"><SortButton column="data_emprestimo" currentSort={sort} onSort={handleSort} label="Data" /></TableHead>
+              <TableHead><SortButton column="estado" currentSort={sort} onSort={handleSort} label="Estado" /></TableHead>
               <TableHead className="text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">A carregar...</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">A carregar...</TableCell></TableRow>
             ) : filtered.length === 0 ? (
-              <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Nenhum empréstimo encontrado</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhum empréstimo encontrado</TableCell></TableRow>
             ) : (
               filtered.map(emp => (
                 <TableRow key={emp.id} className="hover:bg-muted/30 cursor-pointer" onClick={() => { setDetailItem(emp); setDetailOpen(true); }}>
-                  <TableCell className="font-medium">{emp.equipamento_info}</TableCell>
-                  <TableCell>{emp.pessoa_info}</TableCell>
+                  <TableCell className="font-medium">{emp.equipamentoLabel}</TableCell>
+                  <TableCell className="font-mono text-xs">{emp.equipamentoSn}</TableCell>
+                  <TableCell>{emp.pessoaNome}</TableCell>
+                  <TableCell className="text-sm">{emp.pessoaNif}</TableCell>
                   <TableCell className="hidden sm:table-cell text-sm">{format(new Date(emp.data_emprestimo), 'dd/MM/yyyy')}</TableCell>
                   <TableCell><StatusBadge status={emp.estado} /></TableCell>
                   <TableCell className="text-right">
@@ -340,8 +829,11 @@ export default function Emprestimos() {
                       <SmartScanner onResult={v => setEqSearch(v)} label="Ler Equipamento" />
                     </div>
                     <div className="max-h-40 overflow-y-auto space-y-1">
-                      {filteredEq.slice(0, 10).map(eq => (
-                        <button key={eq.id} onClick={() => setSelectedEq(eq)} className="w-full text-left p-2 rounded hover:bg-muted text-sm">{eq.designacao} — {eq.numero_serie}</button>
+                      {filteredEq.map(eq => (
+                        <button key={eq.id} onClick={() => setSelectedEq(eq)} className="w-full text-left p-2 rounded hover:bg-muted text-sm flex justify-between items-center">
+                          <span>{eq.designacao} — {eq.numero_serie}</span>
+                          <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground uppercase font-bold">{eq.estado}</span>
+                        </button>
                       ))}
                       {eqSearch && filteredEq.length === 0 && (
                         <div className="p-2">
@@ -374,8 +866,11 @@ export default function Emprestimos() {
                       <SmartScanner onResult={v => setPessoaSearch(v)} label="Ler Pessoa" />
                     </div>
                     <div className="max-h-40 overflow-y-auto space-y-1">
-                      {filteredPessoas.slice(0, 10).map(p => (
-                        <button key={p.id} onClick={() => setSelectedPessoa(p)} className="w-full text-left p-2 rounded hover:bg-muted text-sm">{p.nome} — {p.tipo} {p.turma ? `(${p.turma})` : ''}</button>
+                      {filteredPessoas.map(p => (
+                        <button key={p.id} onClick={() => setSelectedPessoa(p)} className="w-full text-left p-2 rounded hover:bg-muted text-sm flex justify-between items-center">
+                          <span>{p.nome} — {p.tipo} {p.turma ? `(${p.turma})` : ''}</span>
+                          {!p.ativo && <span className="text-[10px] bg-destructive/10 text-destructive px-1.5 py-0.5 rounded uppercase font-bold">Inativo</span>}
+                        </button>
                       ))}
                       {pessoaSearch && filteredPessoas.length === 0 && (
                         <div className="p-2">
@@ -543,12 +1038,21 @@ export default function Emprestimos() {
                   <p className="text-xs text-muted-foreground font-semibold">Documentos de Entrega</p>
                   <div className="grid grid-cols-3 gap-2 mt-1">
                     {detailItem.documentos_entrega.filter(d => d.ativo !== false).map((doc, i) => (
-                      <a key={i} href={doc.url} target="_blank" rel="noopener noreferrer" className="p-2 rounded border hover:bg-muted/50 text-center text-xs">{doc.nome}</a>
+                      <div 
+                        key={i} 
+                        onClick={() => setSelectedDoc(doc)}
+                        className="p-2 rounded border hover:bg-muted/50 text-center text-xs cursor-pointer truncate"
+                      >
+                        {doc.nome}
+                      </div>
                     ))}
                   </div>
                 </div>
               )}
-              <div className="flex justify-end gap-2">
+              <div className="flex justify-end gap-2 pt-2 border-t">
+                <Button variant="outline" size="sm" onClick={() => handleEdit(detailItem)}>
+                  Editar Detalhes
+                </Button>
                 <Button variant="outline" size="sm" onClick={() => { gerarPDFEmprestimo(detailItem, pdfTemplates); }}>
                   <FileDown className="w-4 h-4 mr-1" />PDF
                 </Button>
@@ -557,6 +1061,283 @@ export default function Emprestimos() {
           </DialogContent>
         </Dialog>
       )}
+
+      <DocumentViewer 
+        open={!!selectedDoc} 
+        onClose={() => setSelectedDoc(null)} 
+        document={selectedDoc} 
+      />
+
+      {/* Edit Dialog */}
+      <Dialog open={editMode} onOpenChange={setEditOpen}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Editar Empréstimo / Devolução</DialogTitle>
+            <DialogDescription>Atualize os acessórios, notas e documentos do registo.</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6">
+            <div className="space-y-4">
+              <h3 className="text-sm font-bold uppercase text-primary border-b pb-1">Dados de Entrega</h3>
+              
+              <AcessoriosCheck 
+                value={editForm.acessorios_entregues} 
+                onChange={(v) => setEditForm({...editForm, acessorios_entregues: v})} 
+                title="Acessórios entregues" 
+              />
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 border rounded-lg bg-muted/20">
+                <div className="flex items-center space-x-2">
+                  <Checkbox id="edit_auth" checked={editForm.autorizacao_ee} onCheckedChange={(v) => setEditForm({...editForm, autorizacao_ee: !!v})} />
+                  <Label htmlFor="edit_auth" className="text-xs cursor-pointer">Autoriz. EE</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox id="edit_lev" checked={editForm.ee_levanta} onCheckedChange={(v) => setEditForm({...editForm, ee_levanta: !!v})} />
+                  <Label htmlFor="edit_lev" className="text-xs cursor-pointer">EE Levanta</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox id="edit_sys" checked={editForm.inserido_sistema} onCheckedChange={(v) => setEditForm({...editForm, inserido_sistema: !!v})} />
+                  <Label htmlFor="edit_sys" className="text-xs cursor-pointer">No Sistema</Label>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold">Notas de Entrega</Label>
+                <Textarea 
+                  value={editForm.notas_entrega} 
+                  onChange={e => setEditForm({...editForm, notas_entrega: e.target.value})}
+                  className="min-h-[80px]"
+                />
+              </div>
+
+              <FileUpload 
+                files={editForm.documentos_entrega} 
+                onChange={v => setEditForm({...editForm, documentos_entrega: v})} 
+                label="Fotos/Documentos de Entrega" 
+              />
+            </div>
+
+            {detailItem?.estado === 'DEVOLVIDO' && (
+              <div className="space-y-4 pt-4 border-t-2">
+                <h3 className="text-sm font-bold uppercase text-amber-600 border-b pb-1">Dados de Devolução</h3>
+                
+                <AcessoriosCheck 
+                  value={editForm.acessorios_devolvidos} 
+                  onChange={(v) => setEditForm({...editForm, acessorios_devolvidos: v})} 
+                  title="Acessórios devolvidos" 
+                />
+
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold">Notas de Devolução</Label>
+                  <Textarea 
+                    value={editForm.notas_devolucao} 
+                    onChange={e => setEditForm({...editForm, notas_devolucao: e.target.value})}
+                    className="min-h-[80px]"
+                  />
+                </div>
+
+                <FileUpload 
+                  files={editForm.documentos_devolucao} 
+                  onChange={v => setEditForm({...editForm, documentos_devolucao: v})} 
+                  label="Fotos/Documentos de Devolução" 
+                />
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setEditOpen(false)}>Cancelar</Button>
+            <Button 
+              onClick={() => updateMutation.mutate({ id: editForm.id, data: editForm })}
+              disabled={updateMutation.isPending}
+            >
+              {updateMutation.isPending ? 'A gravar...' : 'Gravar Alterações'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import Progress Dialog */}
+      <Dialog open={importing} onOpenChange={() => {}}>
+        <DialogContent className="max-w-md" onPointerDownOutside={(e) => e.preventDefault()}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Loader2 className="w-5 h-5 animate-spin text-primary" />
+              A importar documentos...
+            </DialogTitle>
+            <DialogDescription>Por favor, não feche esta janela enquanto o processamento decorre.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <Progress value={importProgress} className="h-2" />
+            <p className="text-center text-sm font-medium text-muted-foreground">
+              {importProgress}% concluído
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import Summary Dialog */}
+      <Dialog open={summaryOpen} onOpenChange={setSummaryOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Resumo da Importação</DialogTitle>
+            <DialogDescription>
+              Processados {importSummary?.sucesso.length + Object.values(importSummary?.erro || {}).flat().length} ficheiros.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6">
+            {/* 1. Equipamento não encontrado */}
+            {importSummary?.erro?.['Equipamento não encontrado']?.length > 0 && (
+              <div className="space-y-2">
+                <h3 className="text-sm font-bold text-destructive flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-destructive" />
+                  Equipamento não encontrado ({importSummary.erro['Equipamento não encontrado'].length})
+                </h3>
+                <div className="grid grid-cols-1 gap-1 pl-4 border-l-2 border-destructive/20">
+                  {importSummary.erro['Equipamento não encontrado'].map((item, i) => (
+                    <div key={i} className="text-xs flex justify-between gap-4">
+                      <span className="font-medium truncate max-w-[200px]" title={item.file}>{item.file}</span>
+                      <span className="text-muted-foreground italic truncate flex-1 text-right">{item.detail}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 2. Erro na leitura do documento */}
+            {importSummary?.erro?.['Erro na leitura do documento']?.length > 0 && (
+              <div className="space-y-2">
+                <h3 className="text-sm font-bold text-destructive flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-destructive" />
+                  Erro na leitura do documento ({importSummary.erro['Erro na leitura do documento'].length})
+                </h3>
+                <div className="grid grid-cols-1 gap-1 pl-4 border-l-2 border-destructive/20">
+                  {importSummary.erro['Erro na leitura do documento'].map((item, i) => (
+                    <div key={i} className="text-xs flex justify-between gap-4">
+                      <span className="font-medium truncate max-w-[200px]" title={item.file}>{item.file}</span>
+                      <span className="text-muted-foreground italic truncate flex-1 text-right">{item.detail}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Sugestões de Correção de S/N */}
+            {importSummary?.sugestoes?.length > 0 && (
+              <div className="space-y-3 bg-amber-50/50 p-4 rounded-lg border border-amber-200">
+                <h3 className="text-sm font-bold text-amber-700 flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                  Sugestões de S/N ({importSummary.sugestoes.length})
+                </h3>
+                <div className="space-y-2 pl-4">
+                  {importSummary.sugestoes.map((sug, i) => (
+                    <div key={i} className="text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 bg-white rounded border border-amber-100 shadow-sm">
+                      <div className="flex-1">
+                        <p className="font-bold truncate max-w-[250px] text-muted-foreground" title={sug.file}>{sug.file}</p>
+                        <div className="mt-1 flex items-center gap-2">
+                          <span className="px-1.5 py-0.5 rounded bg-destructive/10 text-destructive font-mono text-[10px]">{sug.snOriginal}</span>
+                          <span className="text-muted-foreground">→</span>
+                          <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 font-mono font-bold text-[10px]">{sug.snSugerido}</span>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground mt-1">Pessoa: {sug.pessoa.nome}</p>
+                      </div>
+                      <Button 
+                        size="sm" 
+                        variant="default" 
+                        className="h-8 bg-amber-600 hover:bg-amber-700 text-white shadow-none" 
+                        onClick={() => handleConfirmSuggestion(sug, i)}
+                      >
+                        Corrigir e Criar
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 3. Sucesso */}
+            {importSummary?.sucesso.length > 0 && (
+              <div className="space-y-2">
+                <h3 className="text-sm font-bold text-emerald-600 flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-emerald-600" />
+                  Sucesso ({importSummary.sucesso.length})
+                </h3>
+                <div className="grid grid-cols-1 gap-1 pl-4 border-l-2 border-emerald-100">
+                  {importSummary.sucesso.map((item, i) => (
+                    <div key={i} className="text-xs flex justify-between gap-4">
+                      <span className="font-medium truncate max-w-[200px]" title={item.file}>{item.file}</span>
+                      <span className="text-muted-foreground italic truncate flex-1 text-right">{item.detail}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Outros Erros (Restantes) */}
+            {Object.entries(importSummary?.erro || {}).map(([reason, items]) => {
+              if (['Equipamento não encontrado', 'Erro na leitura do documento', 'Já importado (Mesma Pessoa)'].includes(reason)) return null;
+              if (items.length === 0) return null;
+              return (
+                <div key={reason} className="space-y-2">
+                  <h3 className="text-sm font-bold text-destructive flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-destructive" />
+                    {reason} ({items.length})
+                  </h3>
+                  <div className="grid grid-cols-1 gap-1 pl-4 border-l-2 border-destructive/20">
+                    {items.map((item, i) => (
+                      <div key={i} className="text-xs flex justify-between gap-4">
+                        <span className="font-medium truncate max-w-[200px]" title={item.file}>{item.file}</span>
+                        <span className="text-muted-foreground italic truncate flex-1 text-right">{item.detail}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* 4. Já importado (Mesma Pessoa) - No fim e a Verde */}
+            {importSummary?.erro?.['Já importado (Mesma Pessoa)']?.length > 0 && (
+              <div className="space-y-2">
+                <h3 className="text-sm font-bold text-emerald-600 flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-emerald-600" />
+                  Já importado (Mesma Pessoa) ({importSummary.erro['Já importado (Mesma Pessoa)'].length})
+                </h3>
+                <div className="grid grid-cols-1 gap-1 pl-4 border-l-2 border-emerald-100">
+                  {importSummary.erro['Já importado (Mesma Pessoa)'].map((item, i) => (
+                    <div key={i} className="text-xs flex justify-between gap-4">
+                      <span className="font-medium truncate max-w-[200px]" title={item.file}>{item.file}</span>
+                      <span className="text-muted-foreground italic truncate flex-1 text-right">{item.detail}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {importSummary?.sucesso.length === 0 && Object.values(importSummary?.erro || {}).flat().length === 0 && (
+              <p className="text-center py-8 text-muted-foreground">Nenhum ficheiro processado.</p>
+            )}
+          </div>
+
+          <DialogFooter className="flex justify-between items-center sm:justify-between gap-2">
+            <div className="flex gap-2">
+              {importSummary?.falhas?.length > 0 && (
+                <Button variant="outline" onClick={downloadFailedZip} className="text-destructive border-destructive hover:bg-destructive/10">
+                  <Download className="w-4 h-4 mr-2" />
+                  Falhas (ZIP)
+                </Button>
+              )}
+              {importSummary && (
+                <Button variant="outline" onClick={() => gerarRelatorioImportacaoPDF(importSummary)} className="text-primary border-primary hover:bg-primary/10">
+                  <FileText className="w-4 h-4 mr-2" />
+                  Relatório (PDF)
+                </Button>
+              )}
+            </div>
+            <Button onClick={() => setSummaryOpen(false)}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

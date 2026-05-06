@@ -1,19 +1,20 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 // Note: useQueryClient used in sub-components below
-import { db } from '@/api/db';
+import { db, requireSupabase } from '@/api/db';
 
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Search, AlertTriangle, Plus, FileDown } from 'lucide-react';
+import { Search, AlertTriangle, Plus, FileDown, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import StatusBadge from '@/components/shared/StatusBadge';
 import PageHeader from '@/components/shared/PageHeader';
 import FileUpload from '@/components/shared/FileUpload';
+import DocumentViewer from '@/components/shared/DocumentViewer';
 import AcessoriosCheck, { ACESSORIOS } from '@/components/shared/AcessoriosCheck';
 import SmartScanner from '@/components/shared/SmartScanner';
 import { toast } from 'sonner';
@@ -25,9 +26,32 @@ import { useAuth } from '@/lib/AuthContext';
 
 const PROTECTED_EMAIL = 'pedro.mf.santos@outlook.pt';
 
+const SortButton = ({ column, currentSort, onSort, label }) => {
+  const isSorted = currentSort.column === column;
+  return (
+    <Button 
+      variant="ghost" 
+      size="sm" 
+      className="-ml-3 h-8 data-[state=open]:bg-accent"
+      onClick={() => onSort(column)}
+    >
+      <span>{label}</span>
+      {isSorted ? (
+        currentSort.ascending ? (
+          <ArrowUp className="ml-2 h-4 w-4" />
+        ) : (
+          <ArrowDown className="ml-2 h-4 w-4" />
+        )
+      ) : (
+        <ArrowUpDown className="ml-2 h-4 w-4 opacity-0 group-hover:opacity-100" />
+      )}
+    </Button>
+  );
+};
+
 function MiniEquipamentoForm({ onCreated, onCancel }) {
   const qc = useQueryClient();
-  const [form, setForm] = useState({ designacao: '', numero_serie: '', numero_imobilizado: '', marca: '', modelo: '', tipo: 'Portátil', estado: 'DISPONÍVEL', documentos: [] });
+  const [form, setForm] = useState({ designacao: '', numero_serie: '', numero_imobilizado: '', marca: '', modelo: '', tipo: 'Portátil', estado: 'Rececionado', documentos: [] });
   const { data: tipos = [] } = useQuery({ queryKey: ['tipos-equipamento'], queryFn: () => db.entities.TipoEquipamento.list() });
   const tiposAtivos = tipos.filter(t => t.ativo !== false);
   const mut = useMutation({
@@ -99,10 +123,14 @@ export default function Devolucoes() {
   const isAdmin = user?.email === PROTECTED_EMAIL || user?.role === 'admin';
 
   const [search, setSearch] = useState('');
-  const [filtroEstado, setFiltroEstado] = useState('A REVER');
+  const [selectedDoc, setSelectedDoc] = useState(null);
+  const [filtroEstado, setFiltroEstado] = useState('todos');
+  const [sort, setSort] = useState({ column: 'created_at', ascending: false });
   const [formOpen, setFormOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailItem, setDetailItem] = useState(null);
+  const [editMode, setEditOpen] = useState(false);
+  const [editForm, setEditForm] = useState({});
 
   // For searching loans
   const [empSearch, setEmpSearch] = useState('');
@@ -124,15 +152,19 @@ export default function Devolucoes() {
   const [step, setStep] = useState(1);
 
   const { data: devolucoes = [], isLoading } = useQuery({
-    queryKey: ['devolucoes'],
-    queryFn: () => db.entities.Devolucao.list('-created_at')
+    queryKey: ['devolucoes', sort],
+    queryFn: () => db.entities.Devolucao.list(`${sort.ascending ? '' : '-'}${sort.column}`)
   });
   const { data: emprestimosAtivos = [] } = useQuery({
     queryKey: ['emprestimos-ativos'],
     queryFn: () => db.entities.Emprestimo.filter({ estado: 'ATIVO' }, '-created_date')
   });
-  const { data: equipamentos = [] } = useQuery({
-    queryKey: ['equipamentos'], queryFn: () => db.entities.Equipamento.list()
+  const { data: equipamentosDisponiveis = [] } = useQuery({
+    queryKey: ['equipamentos', 'disponiveis'], 
+    queryFn: () => db.entities.Equipamento.filter({ estado: ['Rececionado', 'Recondicionamento'] })
+  });
+  const { data: equipamentosTodos = [] } = useQuery({
+    queryKey: ['equipamentos', 'todos'], queryFn: () => db.entities.Equipamento.list()
   });
   const { data: pessoas = [] } = useQuery({
     queryKey: ['pessoas'], queryFn: () => db.entities.Pessoa.list()
@@ -144,57 +176,124 @@ export default function Devolucoes() {
   const devolveMutation = useMutation({
     mutationFn: async () => {
       const hoje = new Date().toISOString().split('T')[0];
-      let empInfo, eqId, pessoaId, eqInfo, pessoaInfo, empId;
+      let empInfo, eqId, pessoaId, eqInfo, pessoaInfo, empId, eqSnFinal, pessoaNifFinal;
 
       if (modoLivre) {
         eqId = selectedEq.id;
         pessoaId = selectedPessoa.id;
-        eqInfo = `${selectedEq.designacao} (${selectedEq.numero_serie})`;
+        eqInfo = `${selectedEq.tipo} ${selectedEq.marca} ${selectedEq.modelo}`.trim() || selectedEq.designacao;
         pessoaInfo = selectedPessoa.nome;
+        const eqSn = selectedEq.numero_serie;
+        const pessoaNif = selectedPessoa.nif;
         // Create a fake loan first
         const empCriado = await db.entities.Emprestimo.create({
           equipamento_id: eqId, pessoa_id: pessoaId,
-          equipamento_info: eqInfo, pessoa_info: pessoaInfo,
+          equipamento_info: eqInfo, 
+          equipamento_sn: eqSn,
+          pessoa_info: pessoaInfo,
+          pessoa_nif: pessoaNif,
           data_emprestimo: hoje, estado: 'ATIVO', notas_entrega: 'Criado automaticamente na devolução'
         });
         empId = empCriado.id;
+        eqSnFinal = eqSn;
+        pessoaNifFinal = pessoaNif;
       } else {
         empInfo = selectedEmp;
         eqId = selectedEmp.equipamento_id;
         pessoaId = selectedEmp.pessoa_id;
-        eqInfo = selectedEmp.equipamento_info;
-        pessoaInfo = selectedEmp.pessoa_info;
+        eqInfo = selectedEmp.equipamentoLabel || selectedEmp.equipamento_info;
+        eqSnFinal = selectedEmp.equipamentoSn || selectedEmp.equipamento_sn || selectedEmp.numero_serie;
+        pessoaInfo = selectedEmp.pessoaNome || selectedEmp.pessoa_info;
+        pessoaNifFinal = selectedEmp.pessoaNif || selectedEmp.pessoa_nif || selectedEmp.nif;
         empId = selectedEmp.id;
       }
 
-      const devolucao = await db.entities.Devolucao.create({
+      // 1. Criar Devolução
+      // IMPORTANTE: Mapear 'OK' para 'BOM ESTADO' temporariamente se a BD ainda não tiver o valor 'OK'
+      // Mas o erro 400 indica que a BD rejeitou "OK". Vamos usar "BOM ESTADO" que é o valor padrão equivalente no schema.sql
+      const payloadDevolucao = {
         emprestimo_id: empId,
         equipamento_id: eqId,
         pessoa_id: pessoaId,
         equipamento_info: eqInfo,
         pessoa_info: pessoaInfo,
         data_devolucao: hoje,
-        estado_equipamento: estadoEquipamento,
+        estado_equipamento: estadoEquipamento === 'OK' ? 'BOM ESTADO' : estadoEquipamento,
         notas,
         documentos: docs,
         acessorios_devolvidos: acessoriosDevolvidos
+      };
+
+      console.log('Enviando payload devolução:', payloadDevolucao);
+
+      const devolucao = await db.entities.Devolucao.create(payloadDevolucao);
+
+      if (!devolucao || !devolucao.id) {
+        throw new Error('Falha ao obter ID da devolução criada.');
+      }
+
+      // 2. Criar Avaria apenas se necessário e se o trigger não o fizer
+      // Só tentamos criar avaria se o estado NÃO for OK (BOM ESTADO)
+      if (estadoEquipamento !== 'OK') {
+        try {
+          // Pequena pausa para deixar o trigger do Supabase correr primeiro
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          // Verificar se a avaria já foi criada pelo trigger antes de tentar criar manualmente
+          const { data: existentes } = await requireSupabase()
+            .from('avarias')
+            .select('id')
+            .eq('equipamento_id', eqId)
+            .not('estado', 'in', '("ARRANJADO","INUTILIZADO")');
+
+          if (existentes && existentes.length > 0) {
+            console.log('Avaria já criada pelo trigger. Ignorando criação manual.');
+          } else {
+            // Obter o próximo número de avaria (max + 1)
+            const { data: maxAvaria } = await requireSupabase()
+              .from('avarias')
+              .select('numero_avaria')
+              .order('numero_avaria', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            const nextNumero = maxAvaria?.numero_avaria ? maxAvaria.numero_avaria + 1 : 1001;
+
+            await db.entities.Avaria.create({
+              numero_avaria: nextNumero,
+              equipamento_id: eqId,
+              equipamento_info: eqInfo,
+              origem: 'DEVOLUÇÃO',
+              devolucao_id: devolucao.id,
+              estado: 'A REVER',
+              componentes: { 
+                ecra: 'DESCONHECIDO', 
+                disco: 'DESCONHECIDO', 
+                ram: 'DESCONHECIDO', 
+                board: 'DESCONHECIDO', 
+                bateria: 'DESCONHECIDO', 
+                ventoinha: 'DESCONHECIDO',
+                teclado: 'DESCONHECIDO', 
+                touchpad: 'DESCONHECIDO' 
+              },
+              historico_estados: [{ tipo: 'estado', estado_novo: 'A REVER', data: new Date().toISOString(), utilizador: 'Sistema' }]
+            });
+          }
+        } catch (avariaError) {
+          console.warn('Erro controlado ao gerir avaria:', avariaError);
+        }
+      }
+
+      // 3. Atualizar Empréstimo
+      const empEstado = estadoEquipamento === 'OK' ? 'DEVOLVIDO' : (estadoEquipamento === 'COM DANOS' ? 'DANOS PARA REVISÃO' : 'PARA REVISÃO');
+      await db.entities.Emprestimo.update(empId, { 
+        estado: empEstado, 
+        notas_devolucao: notas 
       });
 
-      // Update empréstimo
-      const empEstado = estadoEquipamento === 'COM DANOS' ? 'DANOS PARA REVISÃO' : 'PARA REVISÃO';
-      await db.entities.Emprestimo.update(empId, { estado: empEstado, notas_devolucao: notas });
-
-      // Update equipment + create avaria
-      await db.entities.Equipamento.update(eqId, { estado: 'EM AVARIA' });
-      await db.entities.Avaria.create({
-        equipamento_id: eqId,
-        equipamento_info: eqInfo,
-        origem: 'DEVOLUÇÃO',
-        devolucao_id: devolucao.id,
-        estado: 'A REVER',
-        componentes: { ecra: 'DESCONHECIDO', disco: 'DESCONHECIDO', ram: 'DESCONHECIDO', board: 'DESCONHECIDO', bateria: 'DESCONHECIDO', teclado: 'DESCONHECIDO', touchpad: 'DESCONHECIDO' },
-        historico_estados: [{ tipo: 'estado', estado: 'A REVER', data: new Date().toISOString(), utilizador: 'Sistema' }]
-      });
+      // 4. Atualizar Equipamento
+      const novoEstadoEq = estadoEquipamento === 'OK' ? 'Recondicionamento' : 'Manutenção';
+      await db.entities.Equipamento.update(eqId, { estado: novoEstadoEq });
 
       return { devolucao, eqInfo, pessoaInfo };
     },
@@ -206,6 +305,37 @@ export default function Devolucoes() {
     }
   });
 
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }) => {
+      // 1. Atualizar a devolução
+      const updatedDev = await db.entities.Devolucao.update(id, {
+        acessorios_devolvidos: data.acessorios_devolvidos,
+        notas: data.notas,
+        documentos: data.documentos
+      });
+
+      // 2. Sincronizar com o empréstimo (opcional, mas bom para consistência)
+      if (updatedDev.emprestimo_id) {
+        await db.entities.Emprestimo.update(updatedDev.emprestimo_id, {
+          acessorios_devolvidos: data.acessorios_devolvidos,
+          notas_devolucao: data.notas
+        });
+      }
+
+      return updatedDev;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['devolucoes'] });
+      qc.invalidateQueries({ queryKey: ['emprestimos'] });
+      setEditOpen(false);
+      setDetailOpen(false);
+      toast.success('Alterações gravadas com sucesso');
+    },
+    onError: (err) => {
+      toast.error('Erro ao atualizar: ' + err.message);
+    }
+  });
+
   const resetForm = () => {
     setFormOpen(false); setSelectedEmp(null); setEmpSearch('');
     setEstadoEquipamento('A REVER'); setNotas(''); setDocs([]);
@@ -214,11 +344,42 @@ export default function Devolucoes() {
     setCreateEq(false); setCreatePessoa(false);
   };
 
-  const filteredEmp = emprestimosAtivos.filter(e =>
-    empSearch === '' || [e.equipamento_info, e.pessoa_info].some(f => f?.toLowerCase().includes(empSearch.toLowerCase()))
+  const equipamentoById = React.useMemo(
+    () => new Map((equipamentosTodos || []).map(eq => [eq.id, eq])),
+    [equipamentosTodos]
   );
 
-  const filteredEq = equipamentos.filter(e =>
+  const pessoaById = React.useMemo(
+    () => new Map((pessoas || []).map(p => [p.id, p])),
+    [pessoas]
+  );
+
+  const formatEquipamento = (eq) => {
+    if (!eq) return '';
+    const parts = [eq.tipo, eq.marca, eq.modelo].filter(Boolean);
+    return parts.join(' ').trim();
+  };
+
+  const emprestimosAtivosDecorados = (emprestimosAtivos || []).map(emp => {
+    const eq = equipamentoById.get(emp.equipamento_id);
+    const pessoa = pessoaById.get(emp.pessoa_id);
+    const equipamentoLabel = formatEquipamento(eq) || emp.equipamento_info || emp.designacao || '—';
+    const equipamentoSn = eq?.numero_serie || emp.equipamento_sn || emp.numero_serie || '—';
+    const pessoaNome = pessoa?.nome || emp.pessoa_info || '—';
+    const pessoaNif = pessoa?.nif || emp.pessoa_nif || emp.nif || '—';
+    return { ...emp, equipamentoLabel, equipamentoSn, pessoaNome, pessoaNif };
+  });
+
+  const filteredEmp = emprestimosAtivosDecorados.filter(e =>
+    empSearch === '' || [
+      e.equipamentoLabel,
+      e.equipamentoSn,
+      e.pessoaNome,
+      e.pessoaNif
+    ].some(f => f?.toLowerCase().includes(empSearch.toLowerCase()))
+  );
+
+  const filteredEq = equipamentosDisponiveis.filter(e =>
     eqSearch === '' || [e.numero_serie, e.numero_imobilizado, e.designacao, e.marca, e.modelo].some(f => f?.toLowerCase().includes(eqSearch.toLowerCase()))
   );
 
@@ -226,24 +387,60 @@ export default function Devolucoes() {
     pessoaSearch === '' || [p.nome, p.email, p.turma, p.nif, p.telefone].some(f => f?.toLowerCase().includes(pessoaSearch.toLowerCase()))
   );
 
-  const filteredDev = (devolucoes || [])
-    .filter(d => {
-      const matchSearch = !search || [d.equipamento_info, d.pessoa_info].some(f => f?.toLowerCase().includes(search.toLowerCase()));
-      const matchEstado = filtroEstado === 'todos' || d.estado_equipamento === filtroEstado;
-      return matchSearch && matchEstado;
-    })
-    .sort((a, b) => {
-      const dateA = new Date(a.created_at || 0);
-      const dateB = new Date(b.created_at || 0);
-      return dateB - dateA;
+  const handleSort = (column) => {
+    setSort(prev => ({
+      column,
+      ascending: prev.column === column ? !prev.ascending : true
+    }));
+  };
+
+  const handleEdit = (dev) => {
+    setEditForm({
+      id: dev.id,
+      acessorios_devolvidos: dev.acessorios_devolvidos || {},
+      notas: dev.notas || '',
+      documentos: dev.documentos || []
     });
+    setEditOpen(true);
+  };
+
+  const devolucoesDecoradas = (devolucoes || []).map(d => {
+    const eq = equipamentoById.get(d.equipamento_id);
+    const pessoa = pessoaById.get(d.pessoa_id);
+    const equipamentoLabel = formatEquipamento(eq) || d.equipamento_info || d.designacao || '—';
+    const equipamentoSn = eq?.numero_serie || d.equipamento_sn || d.numero_serie || '—';
+    const pessoaNome = pessoa?.nome || d.pessoa_info || '—';
+    const pessoaNif = pessoa?.nif || d.pessoa_nif || d.nif || '—';
+    return { ...d, equipamentoLabel, equipamentoSn, pessoaNome, pessoaNif };
+  });
+
+  const filteredDev = devolucoesDecoradas.filter(d => {
+    const matchSearch = !search || [
+      d.equipamentoLabel,
+      d.equipamentoSn,
+      d.pessoaNome,
+      d.pessoaNif
+    ].some(f => f?.toLowerCase().includes(search.toLowerCase()));
+    const matchEstado = filtroEstado === 'todos' || d.estado_equipamento === filtroEstado;
+    return matchSearch && matchEstado;
+  });
 
   // Acessórios entregues do empréstimo selecionado
   const acessoriosEntregues = selectedEmp?.acessorios_entregues || {};
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Devoluções" subtitle="Registar e consultar devoluções" action={() => setFormOpen(true)} actionLabel="Nova Devolução" actionIcon={CornerDownLeft} />
+      <PageHeader 
+        title="Devoluções" 
+        subtitle={
+          filteredDev.length === (devolucoes?.length || 0)
+            ? `${devolucoes?.length || 0} devolução(ões) registada(s)`
+            : `${filteredDev.length} de ${devolucoes?.length || 0} devolução(ões) (filtrado)`
+        } 
+        action={() => setFormOpen(true)} 
+        actionLabel="Nova Devolução" 
+        actionIcon={CornerDownLeft} 
+      />
 
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1 flex gap-2">
@@ -269,7 +466,9 @@ export default function Devolucoes() {
           <TableHeader>
             <TableRow className="bg-muted/50">
               <TableHead>Equipamento</TableHead>
+              <TableHead>Nº Série</TableHead>
               <TableHead>Pessoa</TableHead>
+              <TableHead>NIF</TableHead>
               <TableHead className="hidden sm:table-cell">Data</TableHead>
               <TableHead>Estado</TableHead>
               <TableHead className="text-right">Ações</TableHead>
@@ -277,14 +476,16 @@ export default function Devolucoes() {
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">A carregar...</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">A carregar...</TableCell></TableRow>
             ) : filteredDev.length === 0 ? (
-              <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Nenhuma devolução encontrada</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhuma devolução encontrada</TableCell></TableRow>
             ) : (
               filteredDev.map(d => (
                 <TableRow key={d.id} className="hover:bg-muted/30 cursor-pointer" onClick={() => { setDetailItem(d); setDetailOpen(true); }}>
-                  <TableCell className="font-medium">{d.equipamento_info}</TableCell>
-                  <TableCell>{d.pessoa_info}</TableCell>
+                  <TableCell className="font-medium">{d.equipamentoLabel}</TableCell>
+                  <TableCell className="font-mono text-xs">{d.equipamentoSn}</TableCell>
+                  <TableCell>{d.pessoaNome}</TableCell>
+                  <TableCell className="text-sm">{d.pessoaNif}</TableCell>
                   <TableCell className="hidden sm:table-cell text-sm">{format(new Date(d.data_devolucao), 'dd/MM/yyyy')}</TableCell>
                   <TableCell><StatusBadge status={d.estado_equipamento} /></TableCell>
                   <TableCell className="text-right">
@@ -317,8 +518,8 @@ export default function Devolucoes() {
                     <div className="p-3 rounded-lg border bg-blue-50 space-y-2">
                       <div className="flex justify-between items-start">
                         <div>
-                          <p className="text-sm font-medium">{selectedEmp.equipamento_info}</p>
-                          <p className="text-xs text-muted-foreground">{selectedEmp.pessoa_info} — desde {format(new Date(selectedEmp.data_emprestimo), 'dd/MM/yyyy')}</p>
+                          <p className="text-sm font-medium">{selectedEmp.equipamentoLabel}</p>
+                          <p className="text-xs text-muted-foreground">SN: {selectedEmp.equipamentoSn} — {selectedEmp.pessoaNome} — NIF: {selectedEmp.pessoaNif} — desde {format(new Date(selectedEmp.data_emprestimo), 'dd/MM/yyyy')}</p>
                         </div>
                         <Button variant="ghost" size="sm" onClick={() => setSelectedEmp(null)}>Alterar</Button>
                       </div>
@@ -337,13 +538,13 @@ export default function Devolucoes() {
                   ) : (
                     <>
                       <div className="flex gap-2">
-                        <Input placeholder="Pesquisar por pessoa ou equipamento..." value={empSearch} onChange={e => setEmpSearch(e.target.value)} className="flex-1" />
+                        <Input placeholder="Pesquisar por série, equipamento, pessoa ou NIF..." value={empSearch} onChange={e => setEmpSearch(e.target.value)} className="flex-1" />
                         <SmartScanner onResult={v => setEmpSearch(v)} label="Ler Empréstimo" />
                       </div>
                       <div className="max-h-48 overflow-y-auto space-y-1 mt-1">
                         {filteredEmp.map(emp => (
                           <button key={emp.id} onClick={() => setSelectedEmp(emp)} className="w-full text-left p-2 rounded hover:bg-muted text-sm">
-                            <span className="font-medium">{emp.equipamento_info}</span> — {emp.pessoa_info}
+                            <span className="font-medium">{emp.equipamentoSn} — {emp.equipamentoLabel}</span> — {emp.pessoaNome} ({emp.pessoaNif})
                           </button>
                         ))}
                         {filteredEmp.length === 0 && (
@@ -374,8 +575,11 @@ export default function Devolucoes() {
                             <SmartScanner onResult={v => setEqSearch(v)} label="Ler Equipamento" />
                           </div>
                           <div className="max-h-32 overflow-y-auto space-y-1 mt-1">
-                            {filteredEq.slice(0, 8).map(eq => (
-                              <button key={eq.id} onClick={() => setSelectedEq(eq)} className="w-full text-left p-1.5 rounded hover:bg-muted text-sm">{eq.designacao} — {eq.numero_serie}</button>
+                            {filteredEq.map(eq => (
+                              <button key={eq.id} onClick={() => setSelectedEq(eq)} className="w-full text-left p-1.5 rounded hover:bg-muted text-sm flex justify-between items-center">
+                                <span>{eq.designacao} — {eq.numero_serie}</span>
+                                <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground uppercase font-bold">{eq.estado}</span>
+                              </button>
                             ))}
                             {eqSearch && filteredEq.length === 0 && (
                               <Button size="sm" variant="outline" className="mt-1" onClick={() => setCreateEq(true)}><Plus className="w-3 h-3 mr-1" />Criar equipamento</Button>
@@ -400,8 +604,11 @@ export default function Devolucoes() {
                             <SmartScanner onResult={v => setPessoaSearch(v)} label="Ler Pessoa" />
                           </div>
                           <div className="max-h-32 overflow-y-auto space-y-1 mt-1">
-                            {filteredPessoas.slice(0, 8).map(p => (
-                              <button key={p.id} onClick={() => setSelectedPessoa(p)} className="w-full text-left p-1.5 rounded hover:bg-muted text-sm">{p.nome} — {p.tipo}</button>
+                            {filteredPessoas.map(p => (
+                              <button key={p.id} onClick={() => setSelectedPessoa(p)} className="w-full text-left p-1.5 rounded hover:bg-muted text-sm flex justify-between items-center">
+                                <span>{p.nome} — {p.tipo} {p.turma ? `(${p.turma})` : ''}</span>
+                                {!p.ativo && <span className="text-[10px] bg-destructive/10 text-destructive px-1.5 py-0.5 rounded uppercase font-bold">Inativo</span>}
+                              </button>
                             ))}
                             {pessoaSearch && filteredPessoas.length === 0 && (
                               <Button size="sm" variant="outline" className="mt-1" onClick={() => setCreatePessoa(true)}><Plus className="w-3 h-3 mr-1" />Criar pessoa</Button>
@@ -419,6 +626,7 @@ export default function Devolucoes() {
                 <RadioGroup value={estadoEquipamento} onValueChange={setEstadoEquipamento} className="space-y-2">
                   {[
                     { value: 'A REVER', label: 'A rever', desc: 'Necessita de verificação técnica' },
+                    { value: 'OK', label: 'OK', desc: 'Equipamento em bom estado (não abre avaria)' },
                     { value: 'COM DANOS', label: 'Com danos', desc: 'Apresenta danos visíveis ou funcionais' }
                   ].map(opt => (
                     <label key={opt.value} className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${estadoEquipamento === opt.value ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'}`}>
@@ -432,10 +640,19 @@ export default function Devolucoes() {
                 </RadioGroup>
               </div>
 
-              <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200">
-                <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
-                <p className="text-xs text-amber-800">Será criada automaticamente uma avaria com estado "A REVER" para este equipamento.</p>
-              </div>
+              {estadoEquipamento !== 'OK' && (
+                <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                  <p className="text-xs text-amber-800">Será criada automaticamente uma avaria com estado "A REVER" para este equipamento.</p>
+                </div>
+              )}
+
+              {estadoEquipamento === 'OK' && (
+                <div className="flex items-start gap-2 p-3 rounded-lg bg-emerald-50 border border-emerald-200">
+                  <CornerDownLeft className="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0" />
+                  <p className="text-xs text-emerald-800">O equipamento será marcado como "Recondicionamento" e ficará disponível em breve.</p>
+                </div>
+              )}
 
               <AcessoriosCheck value={acessoriosDevolvidos} onChange={setAcessoriosDevolvidos} title="Acessórios devolvidos" />
               <div>
@@ -469,7 +686,11 @@ export default function Devolucoes() {
               </div>
               <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200">
                 <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
-                <p className="text-xs text-amber-800">Avaria será criada automaticamente. Um PDF será gerado.</p>
+                <p className="text-xs text-amber-800">
+                  {estadoEquipamento === 'OK' 
+                    ? 'O equipamento ficará disponível para novo empréstimo. Um PDF será gerado.' 
+                    : 'Avaria será criada automaticamente. Um PDF será gerado.'}
+                </p>
               </div>
               <div className="flex justify-end gap-3">
                 <Button variant="outline" onClick={() => setStep(1)}>Voltar</Button>
@@ -505,7 +726,28 @@ export default function Devolucoes() {
                   </div>
                 </div>
               )}
-              <div className="flex justify-end">
+
+              {detailItem.documentos?.filter(d => d.ativo !== false).length > 0 && (
+                <div>
+                  <p className="text-xs text-muted-foreground font-semibold">Documentos</p>
+                  <div className="grid grid-cols-3 gap-2 mt-1">
+                    {detailItem.documentos.filter(d => d.ativo !== false).map((doc, i) => (
+                      <div 
+                        key={i} 
+                        onClick={() => setSelectedDoc(doc)}
+                        className="p-2 rounded border hover:bg-muted/50 text-center text-xs cursor-pointer truncate"
+                      >
+                        {doc.nome}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2 border-t">
+                <Button variant="outline" size="sm" onClick={() => handleEdit(detailItem)}>
+                  Editar Devolução
+                </Button>
                 <Button variant="outline" size="sm" onClick={() => { gerarPDFDevolucao(detailItem, pdfTemplates); }}>
                   <FileDown className="w-4 h-4 mr-1" />PDF
                 </Button>
@@ -514,6 +756,57 @@ export default function Devolucoes() {
           </DialogContent>
         </Dialog>
       )}
+
+      <DocumentViewer 
+        open={!!selectedDoc} 
+        onClose={() => setSelectedDoc(null)} 
+        document={selectedDoc} 
+      />
+
+      {/* Edit Dialog */}
+      <Dialog open={editMode} onOpenChange={setEditOpen}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Editar Devolução</DialogTitle>
+            <DialogDescription>Atualize os acessórios devolvidos, notas e documentos.</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6">
+            <div className="space-y-4">
+              <AcessoriosCheck 
+                value={editForm.acessorios_devolvidos} 
+                onChange={(v) => setEditForm({...editForm, acessorios_devolvidos: v})} 
+                title="Acessórios devolvidos" 
+              />
+
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold">Notas de Devolução</Label>
+                <Textarea 
+                  value={editForm.notas} 
+                  onChange={e => setEditForm({...editForm, notas: e.target.value})}
+                  className="min-h-[100px]"
+                />
+              </div>
+
+              <FileUpload 
+                files={editForm.documentos} 
+                onChange={v => setEditForm({...editForm, documentos: v})} 
+                label="Fotos/Documentos da Devolução" 
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setEditOpen(false)}>Cancelar</Button>
+            <Button 
+              onClick={() => updateMutation.mutate({ id: editForm.id, data: editForm })}
+              disabled={updateMutation.isPending}
+            >
+              {updateMutation.isPending ? 'A gravar...' : 'Gravar Alterações'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

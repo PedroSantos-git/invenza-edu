@@ -1,4 +1,5 @@
 import { Toaster } from "@/components/ui/toaster"
+import { Toaster as SonnerToaster } from "@/components/ui/sonner"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
@@ -15,6 +16,9 @@ import Emprestimos from '@/pages/Emprestimos';
 import Devolucoes from '@/pages/Devolucoes';
 import Avarias from '@/pages/Avarias';
 import Pedidos from '@/pages/Pedidos';
+import Listas from '@/pages/Listas';
+import NotificacoesDevolucao from '@/pages/NotificacoesDevolucao';
+import Armazem from '@/pages/Armazem';
 import Utilizadores from '@/pages/Utilizadores';
 import PortalPessoa from '@/pages/PortalPessoa';
 import AcessoNegado from '@/pages/AcessoNegado';
@@ -103,11 +107,14 @@ const AppContent = () => {
       <Route element={<AdminLayout user={user} />}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/equipamentos" element={<Equipamentos />} />
+        <Route path="/armazem" element={<Armazem />} />
         <Route path="/pessoas" element={<Pessoas />} />
         <Route path="/emprestimos" element={<Emprestimos />} />
+        <Route path="/notificacoes-devolucao" element={<NotificacoesDevolucao />} />
         <Route path="/devolucoes" element={<Devolucoes />} />
           <Route path="/avarias" element={<Avarias />} />
           <Route path="/pedidos" element={<Pedidos />} />
+          <Route path="/listas" element={<Listas />} />
           {isAdmin && <Route path="/utilizadores" element={<Utilizadores />} />}
           {isAdmin && <Route path="/configuracoes" element={<Configuracoes />} />}
       </Route>
@@ -124,6 +131,7 @@ function App() {
           <AppContent />
         </Router>
         <Toaster />
+        <SonnerToaster position="top-right" closeButton richColors />
       </QueryClientProvider>
     </AuthProvider>
   )

@@ -197,7 +197,7 @@ BEGIN
             v_equip_names[i], -- Usa a lista de 1000 nomes tecnológicos
             CASE WHEN i % 3 <> 0 THEN 'Portátil' ELSE 'Hotspot' END,
             CASE WHEN i % 5 = 0 THEN 'HP' WHEN i % 5 = 1 THEN 'Acer' WHEN i % 5 = 2 THEN 'Lenovo' WHEN i % 5 = 3 THEN 'Dell' ELSE 'Asus' END,
-            'Model-X' || (i % 10), 'DISPONÍVEL', CURRENT_DATE - 450, CURRENT_DATE - 450
+            'Model-X' || (i % 10), 'Rececionado', CURRENT_DATE - 450, CURRENT_DATE - 450
         );
     END LOOP;
 
@@ -279,7 +279,7 @@ BEGIN
     FOR i IN 1..50 LOOP
         SELECT * INTO v_equip_row 
         FROM public.equipamentos e 
-        WHERE e.estado IN ('DISPONÍVEL', 'EM AVARIA') 
+        WHERE e.estado IN ('Rececionado', 'Manutenção') 
           AND e.numero_serie LIKE 'SN-SEED-%' 
           AND NOT EXISTS (
               SELECT 1 FROM public.avarias a 
@@ -292,7 +292,7 @@ BEGIN
         IF v_equip_row.id IS NOT NULL THEN
             INSERT INTO public.avarias (equipamento_id, equipamento_info, origem, estado, componentes, created_at)
             VALUES (v_equip_row.id, v_equip_row.designacao || ' (' || v_equip_row.numero_serie || ')', 'DIRETA', 'A REVER', jsonb_build_object(v_componentes[1 + (i % 8)], 'AVARIADO'), v_random_date);
-            UPDATE public.equipamentos SET estado = 'EM AVARIA'::equipamento_estado WHERE id = v_equip_row.id;
+            UPDATE public.equipamentos SET estado = 'Manutenção'::equipamento_estado WHERE id = v_equip_row.id;
         END IF;
     END LOOP;
 

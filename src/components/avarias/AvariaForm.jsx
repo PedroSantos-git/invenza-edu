@@ -10,17 +10,21 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import FileUpload from '@/components/shared/FileUpload';
 import SmartScanner from '@/components/shared/SmartScanner';
+import ComponentSelector from '@/components/shared/ComponentSelector';
 import { toast } from 'sonner';
 import { Plus } from 'lucide-react';
 
 const DEFAULT_COMPONENTES = {
   ecra: 'DESCONHECIDO', disco: 'DESCONHECIDO', ram: 'DESCONHECIDO',
-  board: 'DESCONHECIDO', bateria: 'DESCONHECIDO', teclado: 'DESCONHECIDO', touchpad: 'DESCONHECIDO'
+  board: 'DESCONHECIDO', bateria: 'DESCONHECIDO', ventoinha: 'DESCONHECIDO',
+  teclado: 'DESCONHECIDO', touchpad: 'DESCONHECIDO'
 };
+
+const ESTADOS_AVARIA = ['A REVER', 'DIAGNOSTICADO', 'EM REPARAÇÃO', 'AGUARDA PEÇAS', 'ARRANJADO', 'INUTILIZADO'];
 
 function MiniEquipamentoForm({ onCreated, onCancel }) {
   const qc = useQueryClient();
-  const [form, setForm] = useState({ designacao: '', numero_serie: '', numero_imobilizado: '', marca: '', modelo: '', tipo: 'Portátil', estado: 'DISPONÍVEL', documentos: [] });
+  const [form, setForm] = useState({ designacao: '', numero_serie: '', numero_imobilizado: '', marca: '', modelo: '', tipo: 'Portátil', estado: 'Rececionado', documentos: [] });
   const { data: tipos = [] } = useQuery({ queryKey: ['tipos-equipamento'], queryFn: () => db.entities.TipoEquipamento.list() });
   const tiposAtivos = tipos.filter(t => t.ativo !== false);
   const mut = useMutation({
@@ -59,37 +63,59 @@ export default function AvariaForm({ open, onClose }) {
   const [eqSearch, setEqSearch] = useState('');
   const [selectedEq, setSelectedEq] = useState(null);
   const [diagnostico, setDiagnostico] = useState('');
+  const [estado, setEstado] = useState('A REVER');
+  const [componentes, setComponentes] = useState(DEFAULT_COMPONENTES);
   const [docs, setDocs] = useState([]);
   const [createEq, setCreateEq] = useState(false);
 
   const { data: equipamentos = [] } = useQuery({
-    queryKey: ['equipamentos'], queryFn: () => db.entities.Equipamento.list()
+    queryKey: ['equipamentos', 'avarias'], 
+    queryFn: () => db.entities.Equipamento.filter({ estado: ['Rececionado', 'Recondicionamento', 'Manutenção', 'Recuperável'] })
   });
 
-  // Allow all states except EMPRESTADO
   const availableEq = equipamentos.filter(e =>
-    e.estado !== 'EMPRESTADO' &&
-    (eqSearch === '' || [e.numero_serie, e.numero_imobilizado, e.designacao, e.marca, e.modelo].some(f => f?.toLowerCase().includes(eqSearch.toLowerCase())))
+    eqSearch === '' || [e.numero_serie, e.numero_imobilizado, e.designacao, e.marca, e.modelo].some(f => f?.toLowerCase().includes(eqSearch.toLowerCase()))
   );
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      await db.entities.Avaria.create({
+      const eqNome = `${selectedEq.tipo} ${selectedEq.marca} ${selectedEq.modelo}`.trim() || selectedEq.designacao;
+      
+      // Obter o próximo número de avaria (max + 1)
+      const { data: maxAvaria } = await db.client
+        .from('avarias')
+        .select('numero_avaria')
+        .order('numero_avaria', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const nextNumero = maxAvaria?.numero_avaria ? maxAvaria.numero_avaria + 1 : 1001;
+
+      const avariaPayload = {
+        numero_avaria: nextNumero,
         equipamento_id: selectedEq.id,
-        equipamento_info: `${selectedEq.designacao} (${selectedEq.numero_serie})`,
+        equipamento_info: eqNome,
         origem: 'DIRETA',
-        estado: 'A REVER',
+        estado: estado,
         diagnostico,
-        componentes: DEFAULT_COMPONENTES,
+        componentes: componentes,
         historico_estados: [{
           tipo: 'estado',
-          estado_novo: 'A REVER',
+          estado_novo: estado,
           data: new Date().toISOString(),
           utilizador: 'Sistema'
         }],
         documentos: docs
-      });
-      await db.entities.Equipamento.update(selectedEq.id, { estado: 'EM AVARIA' });
+      };
+
+      if (['ARRANJADO', 'INUTILIZADO'].includes(estado)) {
+        avariaPayload.data_resolucao = new Date().toISOString().split('T')[0];
+      }
+
+      await db.entities.Avaria.create(avariaPayload);
+      
+      const newEquipState = estado === 'ARRANJADO' ? 'Recondicionamento' : (estado === 'INUTILIZADO' ? 'Inutilizado' : 'Manutenção');
+      await db.entities.Equipamento.update(selectedEq.id, { estado: newEquipState });
     },
     onSuccess: () => {
       qc.invalidateQueries();
@@ -99,7 +125,7 @@ export default function AvariaForm({ open, onClose }) {
   });
 
   const handleClose = () => {
-    setSelectedEq(null); setEqSearch(''); setDiagnostico(''); setDocs([]); setCreateEq(false);
+    setSelectedEq(null); setEqSearch(''); setDiagnostico(''); setEstado('A REVER'); setComponentes(DEFAULT_COMPONENTES); setDocs([]); setCreateEq(false);
     onClose();
   };
 
@@ -112,6 +138,15 @@ export default function AvariaForm({ open, onClose }) {
             <div className="space-y-2">
               <Label className="font-semibold text-muted-foreground">Nº Avaria</Label>
               <div className="p-2 border rounded bg-muted/50 text-sm font-mono">(automático)</div>
+            </div>
+            <div className="space-y-2">
+              <Label className="font-semibold">Estado</Label>
+              <Select value={estado} onValueChange={setEstado}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {ESTADOS_AVARIA.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <div className="space-y-2">
@@ -133,7 +168,7 @@ export default function AvariaForm({ open, onClose }) {
                     <SmartScanner onResult={v => setEqSearch(v)} label="Ler Equipamento" />
                   </div>
                 <div className="max-h-40 overflow-y-auto space-y-1">
-                  {availableEq.slice(0, 10).map(eq => (
+                  {availableEq.map(eq => (
                     <button key={eq.id} onClick={() => setSelectedEq(eq)} className="w-full text-left p-2 rounded hover:bg-muted text-sm flex justify-between">
                       <span>{eq.designacao} — {eq.numero_serie}</span>
                       <span className="text-xs text-muted-foreground">{eq.estado}</span>
@@ -157,6 +192,14 @@ export default function AvariaForm({ open, onClose }) {
               <SmartScanner onResult={v => setDiagnostico((diagnostico ? diagnostico + '\n' : '') + v)} label="Ler Diagnóstico" mode="ocr_only" />
             </div>
           </div>
+
+          <div>
+            <Label className="font-semibold">Componentes</Label>
+            <div className="mt-2">
+              <ComponentSelector componentes={componentes} onChange={setComponentes} />
+            </div>
+          </div>
+
           <FileUpload files={docs} onChange={setDocs} label="Fotos/Documentos" />
 
           <div className="flex justify-end gap-3">

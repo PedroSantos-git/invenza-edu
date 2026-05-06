@@ -1,13 +1,23 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <defs>
-    <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
-      <stop offset="0%" stop-color="#1e3a5f"/>
-      <stop offset="100%" stop-color="#2f5d8f"/>
+    <linearGradient id="grad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#2563eb"/>
+      <stop offset="100%" stop-color="#1e3a5f"/>
     </linearGradient>
   </defs>
-  <rect x="20" y="20" width="472" height="472" rx="110" fill="url(#g)"/>
-  <path d="M118 140h276v34H118zM118 236h276v34H118zM118 332h188v34H118z" fill="#ffffff"/>
-  <circle cx="368" cy="354" r="64" fill="#f59e0b"/>
-  <path d="M342 354l18 18 36-42" stroke="#1e3a5f" stroke-width="16" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect width="512" height="512" rx="112" fill="url(#grad)"/>
+  
+  <!-- Cube/Box Perspective (Modern Inventory) -->
+  <path d="M256 120 L380 190 L380 322 L256 392 L132 322 L132 190 Z" fill="white" fill-opacity="0.1" stroke="white" stroke-width="12"/>
+  <path d="M256 120 L256 256 L380 190 M256 256 L132 190 M256 256 L256 392" stroke="white" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  
+  <!-- Modern Accents (Informatica) -->
+  <circle cx="256" cy="120" r="10" fill="#38bdf8"/>
+  <circle cx="380" cy="190" r="10" fill="#38bdf8"/>
+  <circle cx="380" cy="322" r="10" fill="#38bdf8"/>
+  <circle cx="256" cy="392" r="10" fill="#38bdf8"/>
+  <circle cx="132" cy="322" r="10" fill="#38bdf8"/>
+  <circle cx="132" cy="190" r="10" fill="#38bdf8"/>
+  
+  <path d="M256 256 L300 230 M256 256 L212 230 M256 256 L256 300" stroke="#38bdf8" stroke-width="8" stroke-linecap="round"/>
 </svg>
-

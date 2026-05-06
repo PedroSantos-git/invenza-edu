@@ -26,10 +26,10 @@ export default function Dashboard() {
   });
 
   const stats = {
-    disponiveis: equipamentos.filter(e => e.estado === 'DISPONÍVEL').length,
-    emprestados: equipamentos.filter(e => e.estado === 'EMPRESTADO').length,
-    emAvaria: equipamentos.filter(e => e.estado === 'EM AVARIA').length,
-    inutilizados: equipamentos.filter(e => e.estado === 'INUTILIZADO').length,
+    disponiveis: equipamentos.filter(e => ['Recondicionamento', 'Rececionado'].includes(e.estado)).length,
+    atribuidos: equipamentos.filter(e => ['Aluno', 'Docente', 'Escola'].includes(e.estado)).length,
+    emManutencao: equipamentos.filter(e => ['Manutenção', 'Recuperável'].includes(e.estado)).length,
+    outros: equipamentos.filter(e => ['Extraviado', 'Inutilizado', 'Substituido'].includes(e.estado)).length,
   };
 
   // Gerar últimos 12 meses para os gráficos
@@ -68,7 +68,7 @@ export default function Dashboard() {
   });
 
   // Componentes mais avariados (Lado Direito Inferior - Gráfico de Queijo)
-  const compLabels = { ecra: 'Ecrã', disco: 'Disco', ram: 'RAM', board: 'Board', bateria: 'Bateria', teclado: 'Teclado', rato: 'Rato', carregador: 'Carregador' };
+  const compLabels = { ecra: 'Ecrã', disco: 'Disco', ram: 'RAM', board: 'Board', bateria: 'Bateria', ventoinha: 'Ventoinha', teclado: 'Teclado', rato: 'Rato', carregador: 'Carregador' };
   const compCounts = {};
   avarias.forEach(a => {
     if (a.componentes) {
@@ -96,9 +96,9 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard title="Disponíveis" value={stats.disponiveis} icon={CheckCircle} color="text-emerald-600" bgColor="bg-emerald-100" />
-        <StatCard title="Emprestados" value={stats.emprestados} icon={ArrowRightLeft} color="text-blue-600" bgColor="bg-blue-100" />
-        <StatCard title="Em Avaria" value={stats.emAvaria} icon={AlertTriangle} color="text-amber-600" bgColor="bg-amber-100" />
-        <StatCard title="Inutilizados" value={stats.inutilizados} icon={Ban} color="text-red-600" bgColor="bg-red-100" />
+        <StatCard title="Atribuídos" value={stats.atribuidos} icon={ArrowRightLeft} color="text-blue-600" bgColor="bg-blue-100" />
+        <StatCard title="Em Manutenção" value={stats.emManutencao} icon={AlertTriangle} color="text-amber-600" bgColor="bg-amber-100" />
+        <StatCard title="Inutilizados/Outros" value={stats.outros} icon={Ban} color="text-red-600" bgColor="bg-red-100" />
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">

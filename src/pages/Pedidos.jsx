@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { Search, X, Calendar, Mail, Clock, LifeBuoy, FileText, AlertCircle, Loader2, Plus, Filter } from 'lucide-react';
+import { Search, X, Calendar, Mail, Clock, LifeBuoy, FileText, AlertCircle, Loader2, Plus, Filter, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import StatusBadge from '@/components/shared/StatusBadge';
 import PageHeader from '@/components/shared/PageHeader';
@@ -18,10 +18,34 @@ import PedidoDetail from '@/components/pedidos/PedidoDetail';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 
+const SortButton = ({ column, currentSort, onSort, label }) => {
+  const isSorted = currentSort.column === column;
+  return (
+    <Button 
+      variant="ghost" 
+      size="sm" 
+      className="-ml-3 h-8 data-[state=open]:bg-accent"
+      onClick={() => onSort(column)}
+    >
+      <span>{label}</span>
+      {isSorted ? (
+        currentSort.ascending ? (
+          <ArrowUp className="ml-2 h-4 w-4" />
+        ) : (
+          <ArrowDown className="ml-2 h-4 w-4" />
+        )
+      ) : (
+        <ArrowUpDown className="ml-2 h-4 w-4 opacity-0 group-hover:opacity-100" />
+      )}
+    </Button>
+  );
+};
+
 export default function Pedidos() {
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
   const [filtroStatus, setFiltroStatus] = useState('PENDENTE');
+  const [sort, setSort] = useState({ column: 'created_at', ascending: false });
   const [actionDialogOpen, setActionDialogOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [selectedPedido, setSelectedPedido] = useState(null);
@@ -34,8 +58,8 @@ export default function Pedidos() {
   };
 
   const { data: pedidos = [], isLoading } = useQuery({
-    queryKey: ['pedidos'],
-    queryFn: () => db.entities.Pedido.list('-created_at')
+    queryKey: ['pedidos', sort],
+    queryFn: () => db.entities.Pedido.list(`${sort.ascending ? '' : '-'}${sort.column}`)
   });
 
   const { data: pessoas = [] } = useQuery({
@@ -61,6 +85,7 @@ export default function Pedidos() {
           tipo: emailType,
           to: pessoa.email,
           cc,
+          pessoa_id: pessoa.id,
           vars: {
             pessoa: pessoa.nome,
             ...emailVars
@@ -80,6 +105,13 @@ export default function Pedidos() {
     }
   });
 
+  const handleSort = (column) => {
+    setSort(prev => ({
+      column,
+      ascending: prev.column === column ? !prev.ascending : true
+    }));
+  };
+
   const filtered = (pedidos || [])
     .filter(p => {
       const matchSearch = !search || 
@@ -89,11 +121,6 @@ export default function Pedidos() {
         p.numero_imobilizado?.toLowerCase().includes(search.toLowerCase());
       const matchStatus = filtroStatus === 'todos' || p.status === filtroStatus;
       return matchSearch && matchStatus;
-    })
-    .sort((a, b) => {
-      const dateA = new Date(a.created_at || 0);
-      const dateB = new Date(b.created_at || 0);
-      return dateB - dateA;
     });
 
   const getPessoaInfo = (pessoaId) => {
@@ -253,7 +280,14 @@ export default function Pedidos() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Pedidos" subtitle="Gestão de pedidos de empréstimo, devolução e suporte técnico" />
+      <PageHeader 
+        title="Pedidos" 
+        subtitle={
+          filtered.length === (pedidos?.length || 0)
+            ? `${pedidos?.length || 0} pedido(s) registado(s)`
+            : `${filtered.length} de ${pedidos?.length || 0} pedido(s) (filtrado)`
+        } 
+      />
 
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1 flex gap-2">
@@ -290,11 +324,11 @@ export default function Pedidos() {
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/50 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-              <TableHead>Utilizador / Email</TableHead>
-              <TableHead>Tipo / Data</TableHead>
+              <TableHead><SortButton column="pessoa_info" currentSort={sort} onSort={handleSort} label="Utilizador / Email" /></TableHead>
+              <TableHead><SortButton column="tipo" currentSort={sort} onSort={handleSort} label="Tipo / Data" /></TableHead>
               <TableHead>Informação</TableHead>
               <TableHead>Notas / Detalhes</TableHead>
-              <TableHead>Estado</TableHead>
+              <TableHead><SortButton column="status" currentSort={sort} onSort={handleSort} label="Estado" /></TableHead>
               <TableHead className="text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>

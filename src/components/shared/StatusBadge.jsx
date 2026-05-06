@@ -2,10 +2,19 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
 const statusStyles = {
-  'DISPONÍVEL': 'bg-emerald-100 text-emerald-700 border-emerald-200',
-  'EMPRESTADO': 'bg-blue-100 text-blue-700 border-blue-200',
-  'EM AVARIA': 'bg-amber-100 text-amber-700 border-amber-200',
-  'INUTILIZADO': 'bg-red-100 text-red-700 border-red-200',
+  // Novos estados de Equipamento
+  'Rececionado': 'bg-emerald-100 text-emerald-700 border-emerald-200',
+  'Manutenção': 'bg-amber-100 text-amber-700 border-amber-200',
+  'Inutilizado': 'bg-red-100 text-red-700 border-red-200',
+  'Aluno': 'bg-sky-100 text-sky-700 border-sky-200',
+  'Docente': 'bg-violet-100 text-violet-700 border-violet-200',
+  'Escola': 'bg-slate-100 text-slate-700 border-slate-200',
+  'Extraviado': 'bg-zinc-100 text-zinc-700 border-zinc-200',
+  'Recondicionamento': 'bg-orange-100 text-orange-700 border-orange-200',
+  'Recuperável': 'bg-lime-100 text-lime-700 border-lime-200',
+  'Substituido': 'bg-teal-100 text-teal-700 border-teal-200',
+
+  // Outros estados (Empréstimos, Avarias, etc)
   'ATIVO': 'bg-blue-100 text-blue-700 border-blue-200',
   'DEVOLVIDO': 'bg-emerald-100 text-emerald-700 border-emerald-200',
   'DEVOLVIDO COM AVARIA': 'bg-amber-100 text-amber-700 border-amber-200',

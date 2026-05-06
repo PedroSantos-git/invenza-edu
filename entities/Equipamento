@@ -27,12 +27,39 @@
     "estado": {
       "type": "string",
       "enum": [
-        "DISPON\u00cdVEL",
-        "EMPRESTADO",
-        "EM AVARIA",
-        "INUTILIZADO"
+        "Aluno",
+        "Docente",
+        "Escola",
+        "Extraviado",
+        "Inutilizado",
+        "Manutenção",
+        "Rececionado",
+        "Recondicionamento",
+        "Recuperável",
+        "Substituido"
       ],
-      "default": "DISPON\u00cdVEL"
+      "default": "Rececionado"
+    },
+    "situacao_armazem": {
+      "type": "string",
+      "enum": [
+        "Desconhecido",
+        "Em armazém",
+        "Fora de armazém"
+      ],
+      "default": "Desconhecido"
+    },
+    "historico_armazem": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "data": { "type": "string", "format": "date-time" },
+          "tipo": { "type": "string", "enum": ["ENTRADA", "SAÍDA"] },
+          "utilizador": { "type": "string" }
+        }
+      },
+      "default": []
     },
     "notas": {
       "type": "string"
