@@ -160,8 +160,10 @@ export default function Avarias() {
       const eqAvarias = avarias.filter(a => a.equipamento_id === eq.id)
         .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
       
+      const lastAvaria = eqAvarias[0];
+
       // Se não houver avarias, só passa se todos os filtros forem "indiferente"
-      if (eqAvarias.length === 0) {
+      if (!lastAvaria) {
         return Object.values(compFilters).every(v => v === 'indiferente');
       }
 
@@ -178,12 +180,19 @@ export default function Avarias() {
       });
 
       // Verificar se o equipamento cumpre todos os critérios de filtro
-      return COMPONENTES.every(c => {
+      const matchComps = COMPONENTES.every(c => {
         const filter = compFilters[c.id];
         if (filter === 'indiferente') return true;
         const status = mergedComps[c.id] || 'DESCONHECIDO';
         return status === filter;
       });
+
+      if (matchComps) {
+        // Anexar informação da última avaria para exibição na tabela
+        eq._lastAvariaNum = lastAvaria.numero_avaria;
+      }
+
+      return matchComps;
     });
     setFilteredInutilizados(results);
     setIsSearching(false);
@@ -608,16 +617,17 @@ export default function Avarias() {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/50">
+                    <TableHead className="w-24">Nº Avaria</TableHead>
+                    <TableHead>Equipamento</TableHead>
                     <TableHead>Série / Imobilizado</TableHead>
-                    <TableHead>Designação</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredInutilizados.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={3} className="text-center py-8 text-muted-foreground italic">
-                        Nenhum equipamento inutilizado corresponde aos critérios.
+                      <TableCell colSpan={4} className="text-center py-8 text-muted-foreground italic">
+                        Nenhum equipamento corresponde aos critérios.
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -627,13 +637,18 @@ export default function Avarias() {
                         className="hover:bg-muted/30 cursor-pointer"
                         onClick={() => { setSelectedEq(eq); setEqDetailOpen(true); }}
                       >
+                        <TableCell className="font-mono text-xs font-bold text-red-600">
+                          {eq._lastAvariaNum ? `#${eq._lastAvariaNum.toString().padStart(4, '0')}` : '—'}
+                        </TableCell>
+                        <TableCell className="text-sm font-medium">
+                          {[eq.tipo, eq.marca, eq.modelo].filter(Boolean).join(' ') || eq.designacao}
+                        </TableCell>
                         <TableCell>
                           <div className="flex flex-col">
-                            <span className="font-mono text-xs font-bold">{eq.numero_serie}</span>
+                            <span className="font-mono text-[11px] font-bold">{eq.numero_serie}</span>
                             <span className="text-[10px] text-muted-foreground">{eq.numero_imobilizado || '—'}</span>
                           </div>
                         </TableCell>
-                        <TableCell className="text-sm">{eq.designacao}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1">
                             <Button 
