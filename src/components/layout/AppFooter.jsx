@@ -1,5 +1,5 @@
 import React from 'react';
-import { APP_VERSION, COPYRIGHT } from '@/utils/version';
+import { APP_VERSION, COPYRIGHT, PROJECT_NAME } from '@/utils/version';
 
 export default function AppFooter({ className = '' }) {
   return (
@@ -10,4 +10,6 @@ export default function AppFooter({ className = '' }) {
     </footer>
   );
 }
+
+export { PROJECT_NAME };
 
