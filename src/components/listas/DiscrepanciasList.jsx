@@ -147,6 +147,13 @@ export default function DiscrepanciasList() {
           // Se o estado for igual, apenas atualizar armazém se necessário
           if (item.estado === targetEstado && item.situacao_armazem === targetArmazem) continue;
 
+          // Atualizar o equipamento para o estado de destino (ou intermédio se necessário)
+          // Se o equipamento estiver 'Inutilizado' ou 'Extraviado', movemos para 'Recondicionamento'
+          // primeiro para permitir que os triggers de Empréstimo/Avaria funcionem.
+          if (['Inutilizado', 'Extraviado'].includes(item.estado)) {
+            await db.entities.Equipamento.update(item.id, { estado: 'Recondicionamento' });
+          }
+
           // LOGICA DE SINCRONIZAÇÃO COMPLETA (EMPRESTIMOS, AVARIAS, ETC)
           // Se o estado de destino for Aluno/Docente, precisamos de um empréstimo
           if (['Aluno', 'Docente'].includes(targetEstado)) {
@@ -167,6 +174,9 @@ export default function DiscrepanciasList() {
 
               if (!itemEmps || itemEmps.length === 0) {
                 setStatusMessage(`A criar empréstimo para ${item.numero_serie}...`);
+                // Forçar estado disponível antes de criar empréstimo para passar no trigger
+                await db.entities.Equipamento.update(item.id, { estado: 'Recondicionamento' });
+                
                 await db.entities.Emprestimo.create({
                   equipamento_id: item.id,
                   pessoa_id: sourceEmp.pessoa_id,
@@ -221,7 +231,7 @@ export default function DiscrepanciasList() {
             }
           }
 
-          // Atualizar o equipamento
+          // Atualização final do equipamento (estado e armazém)
           await db.entities.Equipamento.update(item.id, {
             estado: targetEstado,
             situacao_armazem: targetArmazem
