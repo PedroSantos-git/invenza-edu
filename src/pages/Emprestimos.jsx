@@ -28,6 +28,8 @@ import { useAuth } from '@/lib/AuthContext';
 import mammoth from 'mammoth';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
 import { groupEquipmentsIntoKits, isMainEquipment } from '@/utils/kitUtils';
 
 const PROTECTED_EMAIL = 'pedro.mf.santos@outlook.pt';
@@ -458,12 +460,23 @@ export default function Emprestimos() {
 
     const groupedKits = Array.from(kits.values()).map(kit => {
       const main = kit.main || kit.all[0];
+      const siblingsWithLabels = kit.all
+        .filter(e => e.id !== main.id)
+        .map(s => {
+          const sEq = equipamentoById.get(s.equipamento_id);
+          return {
+            ...s,
+            equipamentoLabel: s.equipamentoLabel || (sEq ? `${sEq.tipo} ${sEq.marca} ${sEq.modelo}`.trim() : '—'),
+            equipamentoSn: s.equipamentoSn || sEq?.numero_serie || '—'
+          };
+        });
+
       return {
         ...main,
         isKitLoan: true,
         kitLoanData: {
           count: kit.all.length,
-          siblings: kit.all.filter(e => e.id !== main.id)
+          siblings: siblingsWithLabels
         }
       };
     });

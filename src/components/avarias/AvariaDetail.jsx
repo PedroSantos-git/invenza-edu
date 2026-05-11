@@ -16,10 +16,13 @@ import ConfirmDialog from '@/components/shared/ConfirmDialog';
 import EquipamentoDetail from '@/components/equipamentos/EquipamentoDetail';
 import { toast } from 'sonner';
 import { format, isValid } from 'date-fns';
-import { History, FileDown, Eye } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
+import { History, FileDown, Eye, Loader2 } from 'lucide-react';
 import { repairR2Url, isImageDoc } from '@/utils/r2Helpers';
 import { gerarPDFAvaria } from '@/utils/pdfGenerator';
 import { useAuth } from '@/lib/AuthContext';
+import { useQuery } from '@tanstack/react-query';
 
 const safeFormat = (dateStr, formatStr = 'dd/MM/yyyy') => {
   if (!dateStr) return '—';
@@ -41,6 +44,31 @@ export default function AvariaDetail({ open, onClose, avaria }) {
   const [closeEstado, setCloseEstado] = useState('');
   const [showEquipDetail, setShowEquipDetail] = useState(false);
   const [selectedDoc, setSelectedDoc] = useState(null);
+
+  // Buscar equipamentos do conjunto
+  const { data: kitData, isLoading: loadingKit } = useQuery({
+    queryKey: ['equipamento-kit', avaria.equipamento_id],
+    queryFn: async () => {
+      const eq = await db.entities.Equipamento.get(avaria.equipamento_id);
+      if (!eq?.numero_imobilizado) return { isKit: false };
+      
+      const allEqs = await db.entities.Equipamento.list();
+      const siblings = allEqs.filter(e => e.numero_imobilizado === eq.numero_imobilizado && e.id !== eq.id);
+      
+      return {
+        isKit: true,
+        count: siblings.length + 1,
+        main: eq,
+        siblings: siblings.map(s => ({
+          id: s.id,
+          label: `${s.tipo} ${s.marca} ${s.modelo}`.trim(),
+          sn: s.numero_serie,
+          estado: s.estado
+        }))
+      };
+    },
+    enabled: !!avaria.equipamento_id && open
+  });
 
   const startEdit = () => {
     setForm({
@@ -205,65 +233,102 @@ export default function AvariaDetail({ open, onClose, avaria }) {
                 </div>
               </div>
             ) : (
-              <>
-                <div className="p-4 bg-muted/50 rounded-lg space-y-3">
-                  <div><p className="text-xs text-muted-foreground">Diagnóstico</p><p className="text-sm">{avaria.diagnostico || '—'}</p></div>
-                  <div><p className="text-xs text-muted-foreground">Resolução</p><p className="text-sm">{avaria.resolucao || '—'}</p></div>
-                </div>
+              <Tabs defaultValue="geral">
+                <TabsList className="w-full">
+                  <TabsTrigger value="geral" className="flex-1">Diagnóstico</TabsTrigger>
+                  {kitData?.isKit && kitData.count > 1 && (
+                    <TabsTrigger value="kit" className="flex-1">Conjunto ({kitData.count})</TabsTrigger>
+                  )}
+                  <TabsTrigger value="historico" className="flex-1">Histórico</TabsTrigger>
+                  <TabsTrigger value="docs" className="flex-1">Documentos</TabsTrigger>
+                </TabsList>
 
-                <div>
-                  <p className="text-sm font-semibold mb-2">Componentes</p>
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
-                    {Object.entries(COMP_LABELS).map(([key, label]) => (
-                      <div key={key} className="flex items-center gap-2 text-xs">
-                        <span className="text-muted-foreground w-20">{label}:</span>
-                        <StatusBadge status={avaria.componentes?.[key] || 'DESCONHECIDO'} />
-                      </div>
-                    ))}
+                <TabsContent value="geral" className="space-y-4 pt-3">
+                  <div className="p-4 bg-muted/50 rounded-lg space-y-3">
+                    <div><p className="text-xs text-muted-foreground">Diagnóstico</p><p className="text-sm">{avaria.diagnostico || '—'}</p></div>
+                    <div><p className="text-xs text-muted-foreground">Resolução</p><p className="text-sm">{avaria.resolucao || '—'}</p></div>
                   </div>
-                </div>
 
-                {/* State log */}
-                <div>
-                  <p className="text-sm font-semibold mb-2">Histórico de Estados</p>
-                  {logEntries.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Sem histórico.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {logEntries.map((h, i) => (
-                        <div key={i} className="flex items-center gap-3 text-xs">
-                          <span className="text-muted-foreground w-32">{safeFormat(h.data, 'dd/MM/yyyy HH:mm')}</span>
-                          {h.estado_anterior && <><StatusBadge status={h.estado_anterior} /><span>→</span></>}
-                          <StatusBadge status={h.estado_novo || h.estado} />
-                          <span className="text-muted-foreground">{h.utilizador}</span>
+                  <div>
+                    <p className="text-sm font-semibold mb-2">Componentes</p>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                      {Object.entries(COMP_LABELS).map(([key, label]) => (
+                        <div key={key} className="flex items-center gap-2 text-xs">
+                          <span className="text-muted-foreground w-20">{label}:</span>
+                          <StatusBadge status={avaria.componentes?.[key] || 'DESCONHECIDO'} />
                         </div>
                       ))}
+                    </div>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="kit" className="pt-3 space-y-2">
+                  {loadingKit ? (
+                    <div className="flex justify-center py-4"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
+                  ) : (
+                    <>
+                      <div className="p-3 rounded-lg border border-amber-100 bg-amber-50/20 text-xs flex justify-between items-center">
+                        <div>
+                          <p className="font-bold">{kitData.main?.tipo} {kitData.main?.marca} {kitData.main?.modelo}</p>
+                          <p className="text-muted-foreground font-mono">S/N: {kitData.main?.numero_serie}</p>
+                        </div>
+                        <Badge className="bg-amber-600">AVARIA ATUAL</Badge>
+                      </div>
+                      {kitData.siblings?.map(sibling => (
+                        <div key={sibling.id} className="p-3 rounded-lg border text-xs flex justify-between items-center">
+                          <div>
+                            <p className="font-medium">{sibling.label}</p>
+                            <p className="text-muted-foreground font-mono">S/N: {sibling.sn}</p>
+                          </div>
+                          <StatusBadge status={sibling.estado} className="scale-75 origin-right" />
+                        </div>
+                      ))}
+                    </>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="historico" className="pt-3 space-y-5">
+                  {/* State log */}
+                  <div>
+                    <p className="text-sm font-semibold mb-2">Estados</p>
+                    {logEntries.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">Sem histórico.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {logEntries.map((h, i) => (
+                          <div key={i} className="flex items-center gap-3 text-xs">
+                            <span className="text-muted-foreground w-32">{safeFormat(h.data, 'dd/MM/yyyy HH:mm')}</span>
+                            {h.estado_anterior && <><StatusBadge status={h.estado_anterior} /><span>→</span></>}
+                            <StatusBadge status={h.estado_novo || h.estado} />
+                            <span className="text-muted-foreground">{h.utilizador}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Field change log */}
+                  {fieldLogs.length > 0 && (
+                    <div>
+                      <p className="text-sm font-semibold mb-2">Alterações de Campos</p>
+                      <div className="space-y-2">
+                        {fieldLogs.map((h, i) => (
+                          <div key={i} className="p-2 rounded border text-xs space-y-1">
+                            <div className="flex items-center gap-2 justify-between">
+                              <span className="font-semibold capitalize">{h.campo}</span>
+                              <span className="text-muted-foreground">{safeFormat(h.data, 'dd/MM/yyyy HH:mm')} — {h.utilizador}</span>
+                            </div>
+                            {h.valor_anterior && <p className="text-muted-foreground line-through">{h.valor_anterior}</p>}
+                            <p>{h.valor_novo}</p>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
-                </div>
+                </TabsContent>
 
-                {/* Field change log */}
-                {fieldLogs.length > 0 && (
-                  <div>
-                    <p className="text-sm font-semibold mb-2">Histórico de Alterações</p>
-                    <div className="space-y-2">
-                      {fieldLogs.map((h, i) => (
-                        <div key={i} className="p-2 rounded border text-xs space-y-1">
-                          <div className="flex items-center gap-2 justify-between">
-                            <span className="font-semibold capitalize">{h.campo}</span>
-                            <span className="text-muted-foreground">{safeFormat(h.data, 'dd/MM/yyyy HH:mm')} — {h.utilizador}</span>
-                          </div>
-                          {h.valor_anterior && <p className="text-muted-foreground line-through">{h.valor_anterior}</p>}
-                          <p>{h.valor_novo}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {avaria.documentos?.filter(d => d.ativo !== false).length > 0 && (
-                  <div>
-                    <p className="text-sm font-semibold mb-2">Documentos</p>
+                <TabsContent value="docs" className="pt-3 space-y-4">
+                  {avaria.documentos?.filter(d => d.ativo !== false).length > 0 ? (
                     <div className="grid grid-cols-3 gap-2">
                       {avaria.documentos.filter(d => d.ativo !== false).map((doc, i) => (
                         <div 
@@ -282,23 +347,25 @@ export default function AvariaDetail({ open, onClose, avaria }) {
                         </div>
                       ))}
                     </div>
-                  </div>
-                )}
+                  ) : (
+                    <p className="text-sm text-muted-foreground text-center py-4">Sem documentos ativos.</p>
+                  )}
 
-                {/* Admin: show deleted docs */}
-                {isAdmin && avaria.documentos?.filter(d => d.ativo === false).length > 0 && (
-                  <div>
-                    <p className="text-xs font-semibold text-red-600 mb-1">Documentos eliminados (admin)</p>
-                    <div className="grid grid-cols-3 gap-2">
-                      {avaria.documentos.filter(d => d.ativo === false).map((doc, i) => (
-                        <div key={i} className="p-2 rounded border-2 border-dashed border-red-400 bg-red-50 text-center opacity-70">
-                          <span className="text-xs text-red-600">🗑 {doc.nome}</span>
-                        </div>
-                      ))}
+                  {/* Admin: show deleted docs */}
+                  {isAdmin && avaria.documentos?.filter(d => d.ativo === false).length > 0 && (
+                    <div className="pt-2 border-t">
+                      <p className="text-xs font-semibold text-red-600 mb-1">Documentos eliminados (admin)</p>
+                      <div className="grid grid-cols-3 gap-2">
+                        {avaria.documentos.filter(d => d.ativo === false).map((doc, i) => (
+                          <div key={i} className="p-2 rounded border-2 border-dashed border-red-400 bg-red-50 text-center opacity-70">
+                            <span className="text-xs text-red-600">🗑 {doc.nome}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
-              </>
+                  )}
+                </TabsContent>
+              </Tabs>
             )}
           </div>
         </DialogContent>

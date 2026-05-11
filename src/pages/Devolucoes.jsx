@@ -23,6 +23,8 @@ import { CornerDownLeft } from 'lucide-react';
 import { gerarPDFDevolucao } from '@/utils/pdfGenerator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/lib/AuthContext';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
 import { isMainEquipment } from '@/utils/kitUtils';
 
 const PROTECTED_EMAIL = 'pedro.mf.santos@outlook.pt';
@@ -394,15 +396,39 @@ export default function Devolucoes() {
     setEditOpen(true);
   };
 
-  const devolucoesDecoradas = (devolucoes || []).map(d => {
-    const eq = equipamentoById.get(d.equipamento_id);
-    const pessoa = pessoaById.get(d.pessoa_id);
-    const equipamentoLabel = formatEquipamento(eq) || d.equipamento_info || d.designacao || '—';
-    const equipamentoSn = eq?.numero_serie || d.equipamento_sn || d.numero_serie || '—';
-    const pessoaNome = pessoa?.nome || d.pessoa_info || '—';
-    const pessoaNif = pessoa?.nif || d.pessoa_nif || d.nif || '—';
-    return { ...d, equipamentoLabel, equipamentoSn, pessoaNome, pessoaNif };
-  });
+  const devolucoesDecoradas = React.useMemo(() => {
+    return (devolucoes || []).map(d => {
+      const eq = equipamentoById.get(d.equipamento_id);
+      const pessoa = pessoaById.get(d.pessoa_id);
+      const equipamentoLabel = formatEquipamento(eq) || d.equipamento_info || d.designacao || '—';
+      const equipamentoSn = eq?.numero_serie || d.equipamento_sn || d.numero_serie || '—';
+      const pessoaNome = pessoa?.nome || d.pessoa_info || '—';
+      const pessoaNif = pessoa?.nif || d.pessoa_nif || d.nif || '—';
+
+      // Dados do conjunto para o detalhe
+      const imob = eq?.numero_imobilizado;
+      const kitSiblings = imob ? (equipamentosTodos || []).filter(e => e.numero_imobilizado === imob && e.id !== eq.id) : [];
+      const kitReturnData = {
+        count: kitSiblings.length + 1,
+        siblings: kitSiblings.map(s => ({
+          id: s.id,
+          equipamentoLabel: formatEquipamento(s),
+          equipamentoSn: s.numero_serie,
+          estado: s.estado
+        }))
+      };
+
+      return { 
+        ...d, 
+        equipamentoLabel, 
+        equipamentoSn, 
+        pessoaNome, 
+        pessoaNif,
+        isKitReturn: !!imob,
+        kitReturnData
+      };
+    });
+  }, [devolucoes, equipamentoById, pessoaById, equipamentosTodos]);
 
   const filteredDev = devolucoesDecoradas.filter(d => {
     const matchSearch = !search || [
@@ -705,34 +731,66 @@ export default function Devolucoes() {
                 <div><p className="text-xs text-muted-foreground">Data Devolução</p><p>{format(new Date(detailItem.data_devolucao), 'dd/MM/yyyy')}</p></div>
                 <div><p className="text-xs text-muted-foreground">Estado</p><StatusBadge status={detailItem.estado_equipamento} /></div>
               </div>
-              {detailItem.notas && <div><p className="text-xs text-muted-foreground font-semibold">Notas</p><p className="text-sm mt-1 p-2 bg-muted/30 rounded">{detailItem.notas}</p></div>}
-              {detailItem.acessorios_devolvidos && Object.values(detailItem.acessorios_devolvidos).some(Boolean) && (
-                <div>
-                  <p className="text-xs text-muted-foreground font-semibold">Acessórios Devolvidos</p>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {ACESSORIOS.filter(a => detailItem.acessorios_devolvidos[a.key]).map(a => (
-                      <span key={a.key} className="text-xs bg-emerald-100 text-emerald-700 rounded px-2 py-0.5">{a.label}</span>
-                    ))}
-                  </div>
-                </div>
-              )}
+              <Tabs defaultValue="geral">
+                <TabsList className="w-full">
+                  <TabsTrigger value="geral" className="flex-1">Geral</TabsTrigger>
+                  {detailItem.isKitReturn && detailItem.kitReturnData?.count > 1 && (
+                    <TabsTrigger value="kit" className="flex-1">Conjunto ({detailItem.kitReturnData.count})</TabsTrigger>
+                  )}
+                  <TabsTrigger value="docs" className="flex-1">Documentos</TabsTrigger>
+                </TabsList>
 
-              {detailItem.documentos?.filter(d => d.ativo !== false).length > 0 && (
-                <div>
-                  <p className="text-xs text-muted-foreground font-semibold">Documentos</p>
-                  <div className="grid grid-cols-3 gap-2 mt-1">
-                    {detailItem.documentos.filter(d => d.ativo !== false).map((doc, i) => (
-                      <div 
-                        key={i} 
-                        onClick={() => setSelectedDoc(doc)}
-                        className="p-2 rounded border hover:bg-muted/50 text-center text-xs cursor-pointer truncate"
-                      >
-                        {doc.nome}
+                <TabsContent value="geral" className="space-y-4 pt-3">
+                  {detailItem.notas && <div><p className="text-xs text-muted-foreground font-semibold">Notas</p><p className="text-sm mt-1 p-2 bg-muted/30 rounded">{detailItem.notas}</p></div>}
+                  {detailItem.acessorios_devolvidos && Object.values(detailItem.acessorios_devolvidos).some(Boolean) && (
+                    <div>
+                      <p className="text-xs text-muted-foreground font-semibold">Acessórios Devolvidos</p>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {ACESSORIOS.filter(a => detailItem.acessorios_devolvidos[a.key]).map(a => (
+                          <span key={a.key} className="text-xs bg-emerald-100 text-emerald-700 rounded px-2 py-0.5">{a.label}</span>
+                        ))}
                       </div>
-                    ))}
+                    </div>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="kit" className="pt-3 space-y-2">
+                  <div className="p-3 rounded-lg border border-emerald-100 bg-emerald-50/20 text-xs flex justify-between items-center">
+                    <div>
+                      <p className="font-bold">{detailItem.equipamentoLabel}</p>
+                      <p className="text-muted-foreground font-mono">S/N: {detailItem.equipamentoSn}</p>
+                    </div>
+                    <Badge className="bg-emerald-600">DEVOLVIDO</Badge>
                   </div>
-                </div>
-              )}
+                  {detailItem.kitReturnData?.siblings?.map(sibling => (
+                    <div key={sibling.id} className="p-3 rounded-lg border text-xs flex justify-between items-center">
+                      <div>
+                        <p className="font-medium">{sibling.equipamentoLabel}</p>
+                        <p className="text-muted-foreground font-mono">S/N: {sibling.equipamentoSn}</p>
+                      </div>
+                      <StatusBadge status={sibling.estado} className="scale-75 origin-right" />
+                    </div>
+                  ))}
+                </TabsContent>
+
+                <TabsContent value="docs" className="pt-3">
+                  {detailItem.documentos?.filter(d => d.ativo !== false).length > 0 ? (
+                    <div className="grid grid-cols-3 gap-2">
+                      {detailItem.documentos.filter(d => d.ativo !== false).map((doc, i) => (
+                        <div 
+                          key={i} 
+                          onClick={() => setSelectedDoc(doc)}
+                          className="p-2 rounded border hover:bg-muted/50 text-center text-xs cursor-pointer truncate"
+                        >
+                          {doc.nome}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground text-center py-4">Sem documentos de devolução.</p>
+                  )}
+                </TabsContent>
+              </Tabs>
 
               <div className="flex justify-end gap-2 pt-2 border-t">
                 <Button variant="outline" size="sm" onClick={() => handleEdit(detailItem)}>
