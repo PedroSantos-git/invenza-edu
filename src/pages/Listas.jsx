@@ -382,7 +382,7 @@ export default function Listas() {
 
   // Lógica de Processamento de Dados (Filtro e Ordenação)
   const processedData = useMemo(() => {
-    if (!activeReport || !activeReport.query.data) return [];
+    if (!activeReport || activeReport.customUI || !activeReport.query?.data) return [];
     
     let data = [...activeReport.query.data];
     
@@ -490,22 +490,26 @@ export default function Listas() {
             </Button>
             
             <div className="flex gap-2">
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => exportToExcel(processedData, activeReport.id, activeReport.columns, activeReport.title, getAppliedFilters())}
-                disabled={!processedData.length}
-              >
-                <FileSpreadsheet className="w-4 h-4 mr-2" /> Excel
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => exportToPDF(processedData, activeReport.id, activeReport.columns, activeReport.title, getAppliedFilters())}
-                disabled={!processedData.length}
-              >
-                <FileText className="w-4 h-4 mr-2" /> PDF
-              </Button>
+              {!activeReport.customUI && (
+                <>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => exportToExcel(processedData, activeReport.id, activeReport.columns, activeReport.title, getAppliedFilters())}
+                    disabled={!processedData.length}
+                  >
+                    <FileSpreadsheet className="w-4 h-4 mr-2" /> Excel
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => exportToPDF(processedData, activeReport.id, activeReport.columns, activeReport.title, getAppliedFilters())}
+                    disabled={!processedData.length}
+                  >
+                    <FileText className="w-4 h-4 mr-2" /> PDF
+                  </Button>
+                </>
+              )}
             </div>
           </div>
 
@@ -567,7 +571,7 @@ export default function Listas() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {activeReport.query.isLoading ? (
+                        {activeReport.query?.isLoading ? (
                           <TableRow>
                             <TableCell colSpan={activeReport.columns.length} className="h-32 text-center">
                               <Loader2 className="w-6 h-6 animate-spin mx-auto text-muted-foreground" />
