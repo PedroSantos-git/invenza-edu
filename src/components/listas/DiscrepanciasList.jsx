@@ -21,6 +21,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import StatusBadge from '@/components/shared/StatusBadge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Progress } from '@/components/ui/progress';
 
 export default function DiscrepanciasList() {
   const queryClient = useQueryClient();
@@ -32,6 +33,11 @@ export default function DiscrepanciasList() {
   const [slaveArmazemFilter, setSlaveArmazemFilter] = useState('todos');
   const [sortConfig, setSortConfig] = useState({ key: 'items_count', direction: 'desc' });
   const [selectedKits, setSelectedKits] = useState(new Set());
+  
+  // Estados para barra de progresso
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [statusMessage, setStatusMessage] = useState('');
 
   const { data: equipments = [], isLoading } = useQuery({
     queryKey: ['equipamentos-all'],
@@ -118,14 +124,25 @@ export default function DiscrepanciasList() {
       if (!sourceItem) throw new Error("Item de origem não encontrado");
 
       const kitsToUpdate = discrepancies.filter(d => kitKeys.has(d.kitKey));
+      const totalSteps = kitsToUpdate.reduce((acc, kit) => acc + kit.items.length - 1, 0);
+      let currentStep = 0;
+
+      setIsProcessing(true);
+      setProgress(0);
       
       for (const kit of kitsToUpdate) {
+        setStatusMessage(`A processar conjunto ${kit.imobilizado}...`);
+        
         // 1. Determinar o estado de destino
         const targetEstado = sourceItem.estado;
         const targetArmazem = sourceItem.situacao_armazem;
 
         for (const item of kit.items) {
           if (item.id === sourceItemId) continue;
+          
+          currentStep++;
+          setProgress(Math.round((currentStep / totalSteps) * 100));
+          setStatusMessage(`A sincronizar ${item.tipo} (${item.numero_serie})...`);
 
           // Se o estado for igual, apenas atualizar armazém se necessário
           if (item.estado === targetEstado && item.situacao_armazem === targetArmazem) continue;
@@ -133,7 +150,6 @@ export default function DiscrepanciasList() {
           // LOGICA DE SINCRONIZAÇÃO COMPLETA (EMPRESTIMOS, AVARIAS, ETC)
           // Se o estado de destino for Aluno/Docente, precisamos de um empréstimo
           if (['Aluno', 'Docente'].includes(targetEstado)) {
-            // Procurar empréstimo ativo do sourceItem
             const { data: activeEmps } = await db.client
               .from('emprestimos')
               .select('*')
@@ -143,7 +159,6 @@ export default function DiscrepanciasList() {
 
             if (activeEmps && activeEmps.length > 0) {
               const sourceEmp = activeEmps[0];
-              // Criar empréstimo semelhante para o item atual se não tiver um
               const { data: itemEmps } = await db.client
                 .from('emprestimos')
                 .select('*')
@@ -151,6 +166,7 @@ export default function DiscrepanciasList() {
                 .eq('estado', 'ATIVO');
 
               if (!itemEmps || itemEmps.length === 0) {
+                setStatusMessage(`A criar empréstimo para ${item.numero_serie}...`);
                 await db.entities.Emprestimo.create({
                   equipamento_id: item.id,
                   pessoa_id: sourceEmp.pessoa_id,
@@ -182,6 +198,7 @@ export default function DiscrepanciasList() {
                 .not('estado', 'in', '("ARRANJADO","INUTILIZADO")');
 
               if (!itemAvarias || itemAvarias.length === 0) {
+                setStatusMessage(`A abrir avaria para ${item.numero_serie}...`);
                 const { data: maxAvaria } = await db.client
                   .from('avarias')
                   .select('numero_avaria')
@@ -211,14 +228,21 @@ export default function DiscrepanciasList() {
           });
         }
       }
+      
+      setStatusMessage('Finalizando atualizações...');
+      await new Promise(resolve => setTimeout(resolve, 500));
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['equipamentos-all'] });
       toast.success("Conjuntos atualizados e registos sincronizados");
       setSelectedKits(new Set());
+      setIsProcessing(false);
+      setProgress(0);
+      setStatusMessage('');
     },
     onError: (error) => {
       toast.error("Erro ao atualizar: " + error.message);
+      setIsProcessing(false);
     }
   });
 
@@ -259,6 +283,21 @@ export default function DiscrepanciasList() {
 
   return (
     <div className="space-y-4">
+      {/* Barra de Progresso de Processamento */}
+      {isProcessing && (
+        <div className="bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border rounded-lg p-6 shadow-lg space-y-4 animate-in fade-in zoom-in duration-300">
+          <div className="flex justify-between items-center mb-2">
+            <h3 className="text-sm font-bold flex items-center gap-2">
+              <RefreshCw className="w-4 h-4 animate-spin text-primary" />
+              Processando Sincronização...
+            </h3>
+            <span className="text-xs font-mono font-bold text-primary">{progress}%</span>
+          </div>
+          <Progress value={progress} className="h-2" />
+          <p className="text-xs text-muted-foreground animate-pulse">{statusMessage}</p>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end bg-muted/20 p-4 rounded-lg border">
         <div className="space-y-2 lg:col-span-2">
           <label className="text-[10px] font-bold uppercase text-muted-foreground">Pesquisa</label>
