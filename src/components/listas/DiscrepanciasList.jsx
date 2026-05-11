@@ -26,6 +26,11 @@ export default function DiscrepanciasList() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [errorFilter, setErrorFilter] = useState('todos');
+  const [mestreEstadoFilter, setMestreEstadoFilter] = useState('todos');
+  const [slaveEstadoFilter, setSlaveEstadoFilter] = useState('todos');
+  const [mestreArmazemFilter, setMestreArmazemFilter] = useState('todos');
+  const [slaveArmazemFilter, setSlaveArmazemFilter] = useState('todos');
+  const [sortConfig, setSortConfig] = useState({ key: 'items_count', direction: 'desc' });
   const [selectedKits, setSelectedKits] = useState(new Set());
 
   const { data: equipments = [], isLoading } = useQuery({
@@ -34,36 +39,60 @@ export default function DiscrepanciasList() {
   });
 
   const discrepancies = useMemo(() => {
-    const allDiscrepancies = findKitDiscrepancies(equipments);
+    let allDiscrepancies = findKitDiscrepancies(equipments);
     
-    return allDiscrepancies.filter(disc => {
-      // Filtro de pesquisa
+    // Aplicar Filtros
+    allDiscrepancies = allDiscrepancies.filter(disc => {
+      // 1. Pesquisa
       const nameMatch = !search || disc.items.some(item => 
         [item.numero_serie, item.numero_imobilizado, item.designacao, item.marca, item.modelo]
           .some(f => f?.toLowerCase().includes(search.toLowerCase()))
       );
 
-      // Filtro de erro
+      // 2. Filtro de Erro (Antigo)
       let errorMatch = true;
       if (errorFilter !== 'todos') {
         if (errorFilter === 'estado') errorMatch = disc.hasEstadoDiff;
         if (errorFilter === 'armazem') errorMatch = disc.hasArmazemDiff;
-        
-        // Filtros específicos solicitados pelo utilizador
-        if (errorFilter === 'emprestado') {
-          errorMatch = disc.hasEstadoDiff && disc.items.some(item => ['Aluno', 'Docente'].includes(item.estado));
-        }
-        if (errorFilter === 'avaria') {
-          errorMatch = disc.hasEstadoDiff && disc.items.some(item => item.estado === 'Manutenção');
-        }
-        if (errorFilter === 'devolvido') {
-          errorMatch = disc.hasEstadoDiff && disc.items.some(item => ['Rececionado', 'Recondicionamento'].includes(item.estado));
-        }
+        if (errorFilter === 'emprestado') errorMatch = disc.hasEstadoDiff && disc.items.some(item => ['Aluno', 'Docente'].includes(item.estado));
+        if (errorFilter === 'avaria') errorMatch = disc.hasEstadoDiff && disc.items.some(item => item.estado === 'Manutenção');
+        if (errorFilter === 'devolvido') errorMatch = disc.hasEstadoDiff && disc.items.some(item => ['Rececionado', 'Recondicionamento'].includes(item.estado));
       }
 
-      return nameMatch && errorMatch;
+      // 3. Novos Filtros Avançados
+      const mestreMatch = mestreEstadoFilter === 'todos' || disc.mainItem.estado === mestreEstadoFilter;
+      const slaveMatch = slaveEstadoFilter === 'todos' || disc.slaveItem.estado === slaveEstadoFilter;
+      const mestreArmMatch = mestreArmazemFilter === 'todos' || disc.mainItem.situacao_armazem === mestreArmazemFilter;
+      const slaveArmMatch = slaveArmazemFilter === 'todos' || disc.slaveItem.situacao_armazem === slaveArmazemFilter;
+
+      return nameMatch && errorMatch && mestreMatch && slaveMatch && mestreArmMatch && slaveArmMatch;
     });
-  }, [equipments, search, errorFilter]);
+
+    // Aplicar Ordenação
+    return [...allDiscrepancies].sort((a, b) => {
+      let valA, valB;
+      
+      switch (sortConfig.key) {
+        case 'mestre_estado': valA = a.mainItem.estado; valB = b.mainItem.estado; break;
+        case 'slave_estado': valA = a.slaveItem.estado; valB = b.slaveItem.estado; break;
+        case 'mestre_armazem': valA = a.mainItem.situacao_armazem; valB = b.mainItem.situacao_armazem; break;
+        case 'slave_armazem': valA = a.slaveItem.situacao_armazem; valB = b.slaveItem.situacao_armazem; break;
+        case 'items_count': valA = a.items.length; valB = b.items.length; break;
+        default: valA = a.imobilizado; valB = b.imobilizado;
+      }
+
+      if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [equipments, search, errorFilter, mestreEstadoFilter, slaveEstadoFilter, mestreArmazemFilter, slaveArmazemFilter, sortConfig]);
+
+  const toggleSort = (key) => {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'desc' ? 'asc' : 'desc'
+    }));
+  };
 
   const toggleSelectAll = () => {
     if (selectedKits.size === discrepancies.length) {
@@ -230,24 +259,24 @@ export default function DiscrepanciasList() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col md:flex-row gap-4 items-end">
-        <div className="flex-1 space-y-2">
-          <label className="text-xs font-bold uppercase text-muted-foreground">Pesquisa</label>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end bg-muted/20 p-4 rounded-lg border">
+        <div className="space-y-2 lg:col-span-2">
+          <label className="text-[10px] font-bold uppercase text-muted-foreground">Pesquisa</label>
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input 
               placeholder="Pesquisar S/N ou Imobilizado..." 
-              className="pl-8" 
+              className="pl-8 h-9" 
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
           </div>
         </div>
         
-        <div className="w-full md:w-48 space-y-2">
-          <label className="text-xs font-bold uppercase text-muted-foreground">Tipo de Erro</label>
+        <div className="space-y-2">
+          <label className="text-[10px] font-bold uppercase text-muted-foreground">Tipo de Erro</label>
           <Select value={errorFilter} onValueChange={setErrorFilter}>
-            <SelectTrigger>
+            <SelectTrigger className="h-9 text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -264,6 +293,8 @@ export default function DiscrepanciasList() {
         <div className="flex gap-2">
           <Button 
             variant="outline" 
+            size="sm"
+            className="flex-1 h-9 text-xs font-bold bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
             onClick={() => handleFixSelected(true)}
             disabled={selectedKits.size === 0 || updateMutation.isPending}
           >
@@ -271,11 +302,74 @@ export default function DiscrepanciasList() {
           </Button>
           <Button 
             variant="outline" 
+            size="sm"
+            className="flex-1 h-9 text-xs font-bold bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"
             onClick={() => handleFixSelected(false)}
             disabled={selectedKits.size === 0 || updateMutation.isPending}
           >
-            Seguir Slaves (Hotspot)
+            Seguir Slaves
           </Button>
+        </div>
+
+        {/* Novos Filtros de Estado */}
+        <div className="space-y-2">
+          <label className="text-[10px] font-bold uppercase text-muted-foreground">Estado Mestre</label>
+          <Select value={mestreEstadoFilter} onValueChange={setMestreEstadoFilter}>
+            <SelectTrigger className="h-8 text-[10px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos</SelectItem>
+              {['Aluno', 'Docente', 'Escola', 'Manutenção', 'Rececionado', 'Recondicionamento', 'Substituido', 'Extraviado', 'Inutilizado'].map(s => (
+                <SelectItem key={s} value={s}>{s}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-[10px] font-bold uppercase text-muted-foreground">Estado Slave</label>
+          <Select value={slaveEstadoFilter} onValueChange={setSlaveEstadoFilter}>
+            <SelectTrigger className="h-8 text-[10px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos</SelectItem>
+              {['Aluno', 'Docente', 'Escola', 'Manutenção', 'Rececionado', 'Recondicionamento', 'Substituido', 'Extraviado', 'Inutilizado'].map(s => (
+                <SelectItem key={s} value={s}>{s}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-[10px] font-bold uppercase text-muted-foreground">Armazém Mestre</label>
+          <Select value={mestreArmazemFilter} onValueChange={setMestreArmazemFilter}>
+            <SelectTrigger className="h-8 text-[10px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos</SelectItem>
+              <SelectItem value="Em armazém">Em armazém</SelectItem>
+              <SelectItem value="Fora de armazém">Fora de armazém</SelectItem>
+              <SelectItem value="Desconhecido">Desconhecido</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-[10px] font-bold uppercase text-muted-foreground">Armazém Slave</label>
+          <Select value={slaveArmazemFilter} onValueChange={setSlaveArmazemFilter}>
+            <SelectTrigger className="h-8 text-[10px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos</SelectItem>
+              <SelectItem value="Em armazém">Em armazém</SelectItem>
+              <SelectItem value="Fora de armazém">Fora de armazém</SelectItem>
+              <SelectItem value="Desconhecido">Desconhecido</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -289,10 +383,12 @@ export default function DiscrepanciasList() {
                   onCheckedChange={toggleSelectAll}
                 />
               </TableHead>
-              <TableHead>Imobilizado</TableHead>
-              <TableHead>Equipamentos no Conjunto</TableHead>
-              <TableHead>Discrepância Detetada</TableHead>
-              <TableHead className="text-right">Ações de Correção</TableHead>
+              <TableHead className="cursor-pointer select-none text-[10px] uppercase font-bold" onClick={() => toggleSort('imobilizado')}>
+                Imobilizado {sortConfig.key === 'imobilizado' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+              </TableHead>
+              <TableHead className="text-[10px] uppercase font-bold">Equipamentos no Conjunto</TableHead>
+              <TableHead className="text-[10px] uppercase font-bold">Resumo Estados (Mestre vs Slave)</TableHead>
+              <TableHead className="text-right text-[10px] uppercase font-bold">Ações de Correção</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -300,7 +396,7 @@ export default function DiscrepanciasList() {
               <TableRow>
                 <TableCell colSpan={5} className="h-32 text-center text-muted-foreground">
                   <CheckCircle2 className="w-8 h-8 mx-auto mb-2 text-green-500 opacity-50" />
-                  Nenhuma discrepância detetada nos conjuntos.
+                  Nenhuma discrepância detetada com os filtros atuais.
                 </TableCell>
               </TableRow>
             ) : (
@@ -312,17 +408,18 @@ export default function DiscrepanciasList() {
                       onCheckedChange={() => toggleSelectKit(disc.kitKey)}
                     />
                   </TableCell>
-                  <TableCell className="font-bold">{disc.imobilizado}</TableCell>
+                  <TableCell className="font-bold text-sm">{disc.imobilizado}</TableCell>
                   <TableCell>
                     <div className="space-y-2">
                       {disc.items.map(item => (
                         <div key={item.id} className="flex items-center justify-between text-xs p-1 rounded bg-muted/30 border border-transparent hover:border-primary/20 transition-colors">
                           <div className="flex flex-col">
                             <span className="font-medium">
-                              {isMainEquipment(item) && <Badge variant="outline" className="mr-1 text-[8px] h-3 bg-blue-50 text-blue-700">PC</Badge>}
+                              {isMainEquipment(item) && <Badge variant="outline" className="mr-1 text-[8px] h-3 bg-blue-50 text-blue-700">MESTRE</Badge>}
+                              {!isMainEquipment(item) && item.tipo?.toUpperCase().includes('HOTSPOT') && <Badge variant="outline" className="mr-1 text-[8px] h-3 bg-amber-50 text-amber-700">SLAVE</Badge>}
                               {item.tipo} {item.marca}
                             </span>
-                            <span className="text-[10px] text-muted-foreground">S/N: {item.numero_serie}</span>
+                            <span className="text-[10px] text-muted-foreground font-mono">S/N: {item.numero_serie}</span>
                           </div>
                           <div className="flex items-center gap-2">
                             <StatusBadge status={item.estado} className="scale-75 origin-right" />
@@ -333,7 +430,7 @@ export default function DiscrepanciasList() {
                               className="h-6 px-1 text-[8px] hover:bg-primary/10 hover:text-primary"
                               onClick={() => handleFix(disc.kitKey, item.id)}
                             >
-                              Usar este estado
+                              Usar este
                             </Button>
                           </div>
                         </div>
@@ -341,16 +438,25 @@ export default function DiscrepanciasList() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <div className="flex flex-col gap-1">
-                      {disc.hasEstadoDiff && (
-                        <Badge variant="destructive" className="text-[10px] w-fit">Estados Diferentes</Badge>
-                      )}
-                      {disc.hasArmazemDiff && (
-                        <Badge variant="destructive" className="text-[10px] w-fit">Armazém Diferente</Badge>
-                      )}
-                      {disc.items.length > 2 && (
-                        <Badge variant="secondary" className="text-[10px] w-fit bg-amber-50 text-amber-700 border-amber-200">Kit Grande ({disc.items.length} itens)</Badge>
-                      )}
+                    <div className="flex flex-col gap-2">
+                      <div className="grid grid-cols-2 gap-2 text-[10px]">
+                        <div className="flex flex-col border-r pr-2">
+                          <span className="text-muted-foreground font-bold mb-1">Mestre:</span>
+                          <StatusBadge status={disc.mainItem.estado} className="scale-75 origin-left" />
+                          <span className="mt-1 opacity-70">{disc.mainItem.situacao_armazem}</span>
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-muted-foreground font-bold mb-1">Slave:</span>
+                          <StatusBadge status={disc.slaveItem.estado} className="scale-75 origin-left" />
+                          <span className="mt-1 opacity-70">{disc.slaveItem.situacao_armazem}</span>
+                        </div>
+                      </div>
+                      
+                      <div className="flex flex-wrap gap-1">
+                        {disc.hasEstadoDiff && <Badge variant="destructive" className="text-[8px] h-4">Estado ≠</Badge>}
+                        {disc.hasArmazemDiff && <Badge variant="destructive" className="text-[8px] h-4">Armazém ≠</Badge>}
+                        {disc.items.length > 2 && <Badge variant="secondary" className="text-[8px] h-4 bg-amber-100 text-amber-800 border-amber-200">KIT +{disc.items.length}</Badge>}
+                      </div>
                     </div>
                   </TableCell>
                   <TableCell className="text-right">
@@ -358,7 +464,7 @@ export default function DiscrepanciasList() {
                       <Button 
                         variant="secondary" 
                         size="sm" 
-                        className="text-[10px] h-7 w-32"
+                        className="text-[10px] h-7 w-32 font-bold bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
                         onClick={() => handleFix(disc.kitKey, disc.mainItem.id)}
                       >
                         Seguir Mestre (PC)
@@ -366,7 +472,7 @@ export default function DiscrepanciasList() {
                       <Button 
                         variant="outline" 
                         size="sm" 
-                        className="text-[10px] h-7 w-32"
+                        className="text-[10px] h-7 w-32 font-bold bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"
                         onClick={() => handleFix(disc.kitKey, disc.slaveItem.id)}
                       >
                         Seguir Slave
@@ -379,9 +485,9 @@ export default function DiscrepanciasList() {
           </TableBody>
         </Table>
       </div>
-      <div className="flex justify-between items-center text-xs text-muted-foreground px-1">
-        <span>{discrepancies.length} conjuntos com erros detetados.</span>
-        {selectedKits.size > 0 && <span>{selectedKits.size} conjuntos selecionados.</span>}
+      <div className="flex justify-between items-center text-xs text-muted-foreground px-1 bg-muted/10 p-2 rounded">
+        <span>{discrepancies.length} conjuntos com discrepâncias encontradas.</span>
+        {selectedKits.size > 0 && <span className="font-bold text-primary">{selectedKits.size} conjuntos selecionados para correção em bloco.</span>}
       </div>
     </div>
   );
