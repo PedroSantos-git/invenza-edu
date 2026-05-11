@@ -165,10 +165,13 @@ export const MANUAL_CONTENT = {
       
       ### Auditoria de Conjuntos (Novo):
       Esta nova ferramenta permite detetar e corrigir erros de integridade na base de dados relacionados com os kits:
-      - **Deteção de Discrepâncias**: O sistema identifica todos os conjuntos (mesmo imobilizado) onde os equipamentos têm estados diferentes (ex: um PC está emprestado mas o seu Hotspot aparece como disponível).
-      - **Filtros de Erro**: Pode filtrar por tipos específicos de discrepância: Emprestado, Avaria, Devolvido ou Armazém.
-      - **Correção em Massa**: Pode selecionar vários conjuntos e forçar todos os itens a seguir o estado do "Mestre" (PC).
-      - **Correção Individual**: Para cada conjunto detetado, pode escolher exatamente qual o equipamento que tem o estado correto e aplicar esse estado aos restantes membros do kit.
+      - **Regra 'Substituido'**: Equipamentos com o estado "Substituido" são isolados. Eles só formam kits com outros equipamentos "Substituido" do mesmo imobilizado, garantindo que material de substituição não se misture com o inventário ativo.
+      - **Deteção de Discrepâncias**: O sistema identifica todos os conjuntos (mesmo imobilizado) onde os equipamentos têm estados diferentes. Kits com mais de 2 itens aparecem no topo da lista para priorização.
+      - **Sincronização Completa de Registos**: Ao corrigir um conjunto (Seguir Mestre ou Slave), o sistema não apenas atualiza o estado do equipamento, mas também **cria automaticamente os registos necessários** (Empréstimos ou Avarias) para que o histórico coincida com o estado final, copiando datas e informações do item de origem.
+      - **Botões de Ação**:
+        - **Seguir Mestre (PC)**: Aplica o estado e cria os registos baseados no PC do conjunto.
+        - **Seguir Slave (Hotspot)**: Aplica o estado e cria os registos baseados num acessório (ex: Hotspot).
+      - **Correção em Massa**: Pode selecionar vários conjuntos e aplicar a correção baseada no Mestre ou no Slave para todos em simultâneo.
 
       ### Relatórios Disponíveis:
       - **Empréstimos a Pessoas Inativas**: O relatório mais importante. Mostra quem já não pertence à escola mas ainda detém material. Útil para processos de recuperação.
