@@ -119,18 +119,24 @@ export default function DiscrepanciasList() {
   };
 
   const updateMutation = useMutation({
-    mutationFn: async ({ kitKeys, sourceItemId, mode = 'tudo' }) => {
-      const sourceItem = equipments.find(e => e.id === sourceItemId);
-      if (!sourceItem) throw new Error("Item de origem não encontrado");
+    mutationFn: async (updates) => {
+      // 1. Validar e preparar dados
+      const kitsToProcess = updates.map(u => {
+        const kit = discrepancies.find(d => d.kitKey === u.kitKey);
+        const sourceItem = equipments.find(e => e.id === u.sourceItemId);
+        return { ...u, kit, sourceItem };
+      }).filter(u => u.kit && u.sourceItem);
 
-      const kitsToUpdate = discrepancies.filter(d => kitKeys.has(d.kitKey));
-      const totalSteps = kitsToUpdate.reduce((acc, kit) => acc + kit.items.length - 1, 0);
-      let currentStep = 0;
+      // 2. Calcular total de passos (todos os itens que não são a origem em cada kit)
+      const totalSteps = kitsToProcess.reduce((acc, u) => acc + (u.kit.items.length - 1), 0);
+      
+      if (totalSteps === 0) return;
 
       setIsProcessing(true);
       setProgress(0);
+      let currentStep = 0;
       
-      for (const kit of kitsToUpdate) {
+      for (const { kit, sourceItem, mode } of kitsToProcess) {
         setStatusMessage(`A processar conjunto ${kit.imobilizado}...`);
         
         // Determinar o que sincronizar baseado no modo
@@ -141,7 +147,7 @@ export default function DiscrepanciasList() {
         const targetArmazem = sourceItem.situacao_armazem;
 
         for (const item of kit.items) {
-          if (item.id === sourceItemId) continue;
+          if (item.id === sourceItem.id) continue;
           
           currentStep++;
           setProgress(Math.round((currentStep / totalSteps) * 100));
@@ -163,7 +169,7 @@ export default function DiscrepanciasList() {
               const { data: activeEmps } = await db.client
                 .from('emprestimos')
                 .select('*')
-                .eq('equipamento_id', sourceItemId)
+                .eq('equipamento_id', sourceItem.id)
                 .eq('estado', 'ATIVO')
                 .limit(1);
 
@@ -196,7 +202,7 @@ export default function DiscrepanciasList() {
               const { data: activeAvarias } = await db.client
                 .from('avarias')
                 .select('*')
-                .eq('equipamento_id', sourceItemId)
+                .eq('equipamento_id', sourceItem.id)
                 .not('estado', 'in', '("ARRANJADO","INUTILIZADO")')
                 .limit(1);
 
@@ -260,7 +266,7 @@ export default function DiscrepanciasList() {
   });
 
   const handleFix = (kitKey, sourceItemId, mode = 'tudo') => {
-    updateMutation.mutate({ kitKeys: new Set([kitKey]), sourceItemId, mode });
+    updateMutation.mutate([{ kitKey, sourceItemId, mode }]);
   };
 
   const handleFixSelected = (useMainItem = true, mode = 'tudo') => {
@@ -268,21 +274,14 @@ export default function DiscrepanciasList() {
       toast.error("Selecione pelo menos um conjunto");
       return;
     }
-    
-    toast.promise(
-      (async () => {
-        for (const kitKey of selectedKits) {
-          const disc = discrepancies.find(d => d.kitKey === kitKey);
-          const sourceItem = useMainItem ? disc.mainItem : disc.slaveItem;
-          await updateMutation.mutateAsync({ kitKeys: new Set([kitKey]), sourceItemId: sourceItem.id, mode });
-        }
-      })(),
-      {
-        loading: 'A atualizar e sincronizar conjuntos...',
-        success: 'Operação concluída com sucesso',
-        error: 'Erro ao processar alguns conjuntos'
-      }
-    );
+
+    const updates = Array.from(selectedKits).map(kitKey => {
+      const disc = discrepancies.find(d => d.kitKey === kitKey);
+      const sourceItem = useMainItem ? disc.mainItem : disc.slaveItem;
+      return { kitKey, sourceItemId: sourceItem.id, mode };
+    });
+
+    updateMutation.mutate(updates);
   };
 
   if (isLoading) {
