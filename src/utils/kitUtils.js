@@ -91,3 +91,44 @@ export const getKitIds = (equipment, allEquipments) => {
     .filter(eq => eq.numero_imobilizado?.trim() === imob)
     .map(eq => eq.id);
 };
+
+/**
+ * Finds all kits with discrepancies in state or warehouse location
+ */
+export const findKitDiscrepancies = (equipments) => {
+  if (!equipments || !Array.isArray(equipments)) return [];
+
+  const kits = new Map();
+
+  equipments.forEach(eq => {
+    const imob = eq.numero_imobilizado?.trim();
+    if (!imob) return;
+
+    if (!kits.has(imob)) {
+      kits.set(imob, []);
+    }
+    kits.get(imob).push(eq);
+  });
+
+  const discrepancies = [];
+
+  kits.forEach((items, imob) => {
+    if (items.length <= 1) return;
+
+    const first = items[0];
+    const hasEstadoDiff = items.some(item => item.estado !== first.estado);
+    const hasArmazemDiff = items.some(item => item.situacao_armazem !== first.situacao_armazem);
+
+    if (hasEstadoDiff || hasArmazemDiff) {
+      discrepancies.push({
+        imobilizado: imob,
+        items,
+        hasEstadoDiff,
+        hasArmazemDiff,
+        mainItem: items.find(isMainEquipment) || items[0]
+      });
+    }
+  });
+
+  return discrepancies;
+};

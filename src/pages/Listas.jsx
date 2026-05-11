@@ -30,6 +30,7 @@ import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
+import DiscrepanciasList from '@/components/listas/DiscrepanciasList';
 
 const formatD = (d) => d ? format(new Date(d), 'dd/MM/yyyy') : '—';
 
@@ -367,6 +368,13 @@ export default function Listas() {
           </Select>
         </div>
       )
+    },
+    {
+      id: 'discrepancies',
+      title: 'Auditoria de Conjuntos',
+      description: 'Deteta e corrige discrepâncias de estado entre equipamentos do mesmo imobilizado.',
+      icon: AlertTriangle,
+      customUI: true // Sinaliza que usa um componente customizado
     }
   ];
 
@@ -508,81 +516,89 @@ export default function Listas() {
                   <CardTitle>{activeReport.title}</CardTitle>
                   <CardDescription>{activeReport.description}</CardDescription>
                 </div>
-                <div className="relative w-full md:w-64">
-                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input 
-                    placeholder="Pesquisar nesta lista..." 
-                    className="pl-8" 
-                    value={globalSearch}
-                    onChange={(e) => setGlobalSearch(e.target.value)}
-                  />
-                </div>
+                {!activeReport.customUI && (
+                  <div className="relative w-full md:w-64">
+                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input 
+                      placeholder="Pesquisar nesta lista..." 
+                      className="pl-8" 
+                      value={globalSearch}
+                      onChange={(e) => setGlobalSearch(e.target.value)}
+                    />
+                  </div>
+                )}
               </div>
             </CardHeader>
             <CardContent>
-              {activeReport.filters}
+              {activeReport.customUI ? (
+                <DiscrepanciasList />
+              ) : (
+                <>
+                  {activeReport.filters}
 
-              <div className="rounded-md border overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/50">
-                      {activeReport.columns.map((col, idx) => {
-                        const key = col.sortKey || col.accessor;
-                        const isSorted = sortConfig.key === key;
-                        return (
-                          <TableHead 
-                            key={idx} 
-                            className={col.sortable ? "cursor-pointer select-none" : ""}
-                            onClick={() => col.sortable && handleSort(key)}
-                          >
-                            <div className="flex items-center gap-1">
-                              {col.header}
-                              {col.sortable && (
-                                <span className="text-muted-foreground">
-                                  {isSorted ? (
-                                    sortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
-                                  ) : (
-                                    <ArrowUpDown className="w-3 h-3 opacity-30" />
+                  <div className="rounded-md border overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-muted/50">
+                          {activeReport.columns.map((col, idx) => {
+                            const key = col.sortKey || col.accessor;
+                            const isSorted = sortConfig.key === key;
+                            return (
+                              <TableHead 
+                                key={idx} 
+                                className={col.sortable ? "cursor-pointer select-none" : ""}
+                                onClick={() => col.sortable && handleSort(key)}
+                              >
+                                <div className="flex items-center gap-1">
+                                  {col.header}
+                                  {col.sortable && (
+                                    <span className="text-muted-foreground">
+                                      {isSorted ? (
+                                        sortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                                      ) : (
+                                        <ArrowUpDown className="w-3 h-3 opacity-30" />
+                                      )}
+                                    </span>
                                   )}
-                                </span>
-                              )}
-                            </div>
-                          </TableHead>
-                        );
-                      })}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {activeReport.query.isLoading ? (
-                      <TableRow>
-                        <TableCell colSpan={activeReport.columns.length} className="h-32 text-center">
-                          <Loader2 className="w-6 h-6 animate-spin mx-auto text-muted-foreground" />
-                          <p className="text-xs text-muted-foreground mt-2">A carregar dados...</p>
-                        </TableCell>
-                      </TableRow>
-                    ) : processedData.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={activeReport.columns.length} className="h-32 text-center text-muted-foreground text-sm">
-                          {globalSearch ? 'Nenhum resultado para a pesquisa.' : 'Nenhum registo encontrado.'}
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      processedData.map((row, rowIdx) => (
-                        <TableRow key={rowIdx} className="hover:bg-muted/30">
-                          {activeReport.columns.map((col, colIdx) => (
-                            <TableCell key={colIdx}>
-                              {typeof col.accessor === 'function' ? col.accessor(row) : row[col.accessor]}
-                            </TableCell>
-                          ))}
+                                </div>
+                              </TableHead>
+                            );
+                          })}
                         </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-              <div className="mt-4 text-xs text-muted-foreground">
-                Total: {processedData.length} registos encontrados.
-              </div>
+                      </TableHeader>
+                      <TableBody>
+                        {activeReport.query.isLoading ? (
+                          <TableRow>
+                            <TableCell colSpan={activeReport.columns.length} className="h-32 text-center">
+                              <Loader2 className="w-6 h-6 animate-spin mx-auto text-muted-foreground" />
+                              <p className="text-xs text-muted-foreground mt-2">A carregar dados...</p>
+                            </TableCell>
+                          </TableRow>
+                        ) : processedData.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={activeReport.columns.length} className="h-32 text-center text-muted-foreground text-sm">
+                              {globalSearch ? 'Nenhum resultado para a pesquisa.' : 'Nenhum registo encontrado.'}
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          processedData.map((row, rowIdx) => (
+                            <TableRow key={rowIdx} className="hover:bg-muted/30">
+                              {activeReport.columns.map((col, colIdx) => (
+                                <TableCell key={colIdx}>
+                                  {typeof col.accessor === 'function' ? col.accessor(row) : row[col.accessor]}
+                                </TableCell>
+                              ))}
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  <div className="mt-4 text-xs text-muted-foreground">
+                    Total: {processedData.length} registos encontrados.
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
         </div>

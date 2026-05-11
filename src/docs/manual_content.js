@@ -161,6 +161,13 @@ export const MANUAL_CONTENT = {
     content: `
       Ferramenta para extração de dados e auditoria.
       
+      ### Auditoria de Conjuntos (Novo):
+      Esta nova ferramenta permite detetar e corrigir erros de integridade na base de dados relacionados com os kits:
+      - **Deteção de Discrepâncias**: O sistema identifica todos os conjuntos (mesmo imobilizado) onde os equipamentos têm estados diferentes (ex: um PC está emprestado mas o seu Hotspot aparece como disponível).
+      - **Filtros de Erro**: Pode filtrar por tipos específicos de discrepância: Emprestado, Avaria, Devolvido ou Armazém.
+      - **Correção em Massa**: Pode selecionar vários conjuntos e forçar todos os itens a seguir o estado do "Mestre" (PC).
+      - **Correção Individual**: Para cada conjunto detetado, pode escolher exatamente qual o equipamento que tem o estado correto e aplicar esse estado aos restantes membros do kit.
+
       ### Relatórios Disponíveis:
       - **Empréstimos a Pessoas Inativas**: O relatório mais importante. Mostra quem já não pertence à escola mas ainda detém material. Útil para processos de recuperação.
         - **Novo Filtro de Email**: Pode agora filtrar por "Sem email*" para identificar pessoas que não têm um email institucional (@djoaoii.com) registado nem no seu contacto pessoal nem no do Encarregado de Educação.
