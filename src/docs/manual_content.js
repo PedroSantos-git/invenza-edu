@@ -88,7 +88,9 @@ export const MANUAL_CONTENT = {
       
       ### Empréstimo de Conjuntos (Novo):
       Ao selecionar um PC para empréstimo, o sistema deteta automaticamente todos os acessórios associados ao mesmo **Número de Imobilizado** (ex: Hotspot, Mala).
-      - O empréstimo é formalizado como uma unidade única.
+      - **Pesquisa por Imobilizado**: Pode agora pesquisar diretamente pelo Número de Imobilizado na lista de empréstimos.
+      - **Agrupamento Visual**: A lista de empréstimos agrupa agora os itens por conjunto, mostrando o PC como item principal.
+      - **Detalhe do Conjunto**: Ao clicar num empréstimo, existe um novo separador **"Conjunto"** que lista detalhadamente todos os equipamentos (S/N, Estado, Armazém) que fazem parte desse imobilizado.
       - Todos os itens do conjunto mudam automaticamente para o estado do beneficiário (**Aluno** ou **Docente**).
       - O Auto de Entrega gerado incluirá a menção ao conjunto detetado.
 

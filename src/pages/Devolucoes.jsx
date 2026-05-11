@@ -226,6 +226,12 @@ export default function Devolucoes() {
       // O item principal do kit para registar a avaria/devolução mestre
       const mainEq = kitItems.find(isMainEquipment) || kitItems[0];
 
+      if (kitItems.length > 1) {
+        toast.info(`Conjunto detetado (${kitItems.length} itens)`, {
+          description: `A processar devolução para: ${kitItems.map(i => i.tipo).join(', ')}`
+        });
+      }
+
       // 1. Criar Devolução (apenas uma para o conjunto)
       const payloadDevolucao = {
         emprestimo_id: empId,

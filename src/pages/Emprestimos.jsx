@@ -402,7 +402,7 @@ export default function Emprestimos() {
   });
 
   const filteredEqRaw = equipamentosDisponiveis.filter(e =>
-    eqSearch === '' || [e.numero_serie, e.designacao, e.marca, e.modelo].some(f => f?.toLowerCase().includes(eqSearch.toLowerCase()))
+    eqSearch === '' || [e.numero_serie, e.numero_imobilizado, e.designacao, e.marca, e.modelo].some(f => f?.toLowerCase().includes(eqSearch.toLowerCase()))
   );
 
   const filteredEq = React.useMemo(() => groupEquipmentsIntoKits(filteredEqRaw), [filteredEqRaw]);
@@ -411,17 +411,73 @@ export default function Emprestimos() {
     (pessoaSearch === '' || [p.nome, p.email, p.turma, p.nif, p.telefone].some(f => f?.toLowerCase().includes(pessoaSearch.toLowerCase())))
   );
 
-  const filtered = (emprestimosDecorados || [])
+  const filteredRaw = (emprestimosDecorados || [])
     .filter(e => {
       const matchSearch = !searchTerm || [
         e.equipamentoLabel,
         e.equipamentoSn,
+        e.equipamento_imobilizado, // Usar o campo do empréstimo se existir ou decorar
         e.pessoaNome,
         e.pessoaNif
       ].some(f => f?.toLowerCase().includes(searchTerm.toLowerCase()));
       const matchEstado = filtroEstado === 'todos' || e.estado === filtroEstado;
       return matchSearch && matchEstado;
     });
+
+  // Agrupar empréstimos por Kit (Imobilizado)
+  const filtered = React.useMemo(() => {
+    const kits = new Map();
+    const individual = [];
+
+    filteredRaw.forEach(emp => {
+      const eq = equipamentoById.get(emp.equipamento_id);
+      const imob = eq?.numero_imobilizado?.trim();
+      
+      if (!imob) {
+        individual.push(emp);
+        return;
+      }
+
+      if (!kits.has(imob)) {
+        kits.set(imob, {
+          imobilizado: imob,
+          main: null,
+          all: [],
+          isKitLoan: true
+        });
+      }
+
+      const kit = kits.get(imob);
+      kit.all.push(emp);
+
+      // Tentar encontrar o empréstimo do PC como principal
+      if (isMainEquipment(eq)) {
+        kit.main = emp;
+      }
+    });
+
+    const groupedKits = Array.from(kits.values()).map(kit => {
+      const main = kit.main || kit.all[0];
+      return {
+        ...main,
+        isKitLoan: true,
+        kitLoanData: {
+          count: kit.all.length,
+          siblings: kit.all.filter(e => e.id !== main.id)
+        }
+      };
+    });
+
+    const combined = [...groupedKits, ...individual];
+    
+    // Aplicar ordenação
+    return combined.sort((a, b) => {
+      const valA = a[sort.column];
+      const valB = b[sort.column];
+      if (sort.ascending) return valA > valB ? 1 : -1;
+      return valA < valB ? 1 : -1;
+    });
+  }, [filteredRaw, sort, equipamentoById]);
 
   const handleImportAuto = async (e) => {
     const files = Array.from(e.target.files || []);
@@ -810,7 +866,16 @@ export default function Emprestimos() {
             ) : (
               filtered.map(emp => (
                 <TableRow key={emp.id} className="hover:bg-muted/30 cursor-pointer" onClick={() => { setDetailItem(emp); setDetailOpen(true); }}>
-                  <TableCell className="font-medium">{emp.equipamentoLabel}</TableCell>
+                  <TableCell className="font-medium">
+                    <div className="flex flex-col">
+                      <span>{emp.equipamentoLabel}</span>
+                      {emp.isKitLoan && emp.kitLoanData.count > 1 && (
+                        <span className="text-[10px] text-blue-600 font-bold">
+                          CONJUNTO (+ {emp.kitLoanData.count - 1} itens)
+                        </span>
+                      )}
+                    </div>
+                  </TableCell>
                   <TableCell className="font-mono text-xs">{emp.equipamentoSn}</TableCell>
                   <TableCell>{emp.pessoaNome}</TableCell>
                   <TableCell className="text-sm">{emp.pessoaNif}</TableCell>
@@ -1067,34 +1132,68 @@ export default function Emprestimos() {
                 </div>
               </div>
 
-              {detailItem.notas_entrega && <div><p className="text-xs text-muted-foreground font-semibold">Notas de Entrega</p><p className="text-sm mt-1 p-2 bg-muted/30 rounded">{detailItem.notas_entrega}</p></div>}
-              {detailItem.acessorios_entregues && Object.values(detailItem.acessorios_entregues).some(Boolean) && (
-                <div>
-                  <p className="text-xs text-muted-foreground font-semibold">Acessórios Entregues</p>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {Object.entries(detailItem.acessorios_entregues).filter(([,v]) => v).map(([k]) => (
-                      <span key={k} className="text-xs bg-blue-100 text-blue-700 rounded px-2 py-0.5">{k}</span>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {detailItem.notas_devolucao && <div><p className="text-xs text-muted-foreground font-semibold">Notas de Devolução</p><p className="text-sm mt-1 p-2 bg-muted/30 rounded">{detailItem.notas_devolucao}</p></div>}
-              {detailItem.documentos_entrega?.filter(d => d.ativo !== false).length > 0 && (
-                <div>
-                  <p className="text-xs text-muted-foreground font-semibold">Documentos de Entrega</p>
-                  <div className="grid grid-cols-3 gap-2 mt-1">
-                    {detailItem.documentos_entrega.filter(d => d.ativo !== false).map((doc, i) => (
-                      <div 
-                        key={i} 
-                        onClick={() => setSelectedDoc(doc)}
-                        className="p-2 rounded border hover:bg-muted/50 text-center text-xs cursor-pointer truncate"
-                      >
-                        {doc.nome}
+              <Tabs defaultValue="geral">
+                <TabsList className="w-full">
+                  <TabsTrigger value="geral" className="flex-1">Geral</TabsTrigger>
+                  {detailItem.isKitLoan && detailItem.kitLoanData.count > 1 && (
+                    <TabsTrigger value="kit" className="flex-1">Conjunto ({detailItem.kitLoanData.count})</TabsTrigger>
+                  )}
+                  <TabsTrigger value="docs" className="flex-1">Documentos</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="geral" className="space-y-4 pt-3">
+                  {detailItem.notas_entrega && <div><p className="text-xs text-muted-foreground font-semibold">Notas de Entrega</p><p className="text-sm mt-1 p-2 bg-muted/30 rounded">{detailItem.notas_entrega}</p></div>}
+                  {detailItem.acessorios_entregues && Object.values(detailItem.acessorios_entregues).some(Boolean) && (
+                    <div>
+                      <p className="text-xs text-muted-foreground font-semibold">Acessórios Entregues</p>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {Object.entries(detailItem.acessorios_entregues).filter(([,v]) => v).map(([k]) => (
+                          <span key={k} className="text-xs bg-blue-100 text-blue-700 rounded px-2 py-0.5">{k}</span>
+                        ))}
                       </div>
-                    ))}
+                    </div>
+                  )}
+                  {detailItem.notas_devolucao && <div><p className="text-xs text-muted-foreground font-semibold">Notas de Devolução</p><p className="text-sm mt-1 p-2 bg-muted/30 rounded">{detailItem.notas_devolucao}</p></div>}
+                </TabsContent>
+
+                <TabsContent value="kit" className="pt-3 space-y-2">
+                  <div className="p-3 rounded-lg border border-blue-100 bg-blue-50/20 text-xs flex justify-between items-center">
+                    <div>
+                      <p className="font-bold">{detailItem.equipamentoLabel}</p>
+                      <p className="text-muted-foreground font-mono">S/N: {detailItem.equipamentoSn}</p>
+                    </div>
+                    <Badge className="bg-blue-600">PRINCIPAL</Badge>
                   </div>
-                </div>
-              )}
+                  {detailItem.kitLoanData?.siblings?.map(sibling => (
+                    <div key={sibling.id} className="p-3 rounded-lg border text-xs flex justify-between items-center">
+                      <div>
+                        <p className="font-medium">{sibling.equipamentoLabel}</p>
+                        <p className="text-muted-foreground font-mono">S/N: {sibling.equipamentoSn}</p>
+                      </div>
+                      <StatusBadge status={sibling.estado} className="scale-75 origin-right" />
+                    </div>
+                  ))}
+                </TabsContent>
+
+                <TabsContent value="docs" className="pt-3">
+                  {detailItem.documentos_entrega?.filter(d => d.ativo !== false).length > 0 ? (
+                    <div className="grid grid-cols-3 gap-2">
+                      {detailItem.documentos_entrega.filter(d => d.ativo !== false).map((doc, i) => (
+                        <div 
+                          key={i} 
+                          onClick={() => setSelectedDoc(doc)}
+                          className="p-2 rounded border hover:bg-muted/50 text-center text-xs cursor-pointer truncate"
+                        >
+                          {doc.nome}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground text-center py-4">Sem documentos de entrega.</p>
+                  )}
+                </TabsContent>
+              </Tabs>
+
               <div className="flex justify-end gap-2 pt-2 border-t">
                 <Button variant="outline" size="sm" onClick={() => handleEdit(detailItem)}>
                   Editar Detalhes

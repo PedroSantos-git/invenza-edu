@@ -321,6 +321,12 @@ export default function Armazem() {
         if (siblings && siblings.length > 0) {
           kitItems = [...kitItems, ...siblings];
           console.log(`Conjunto detetado com ${kitItems.length} itens para o imobilizado ${imob}`);
+          
+          // Toast detalhado para o conjunto
+          const componentNames = siblings.map(s => s.tipo).join(', ');
+          toast.info(`Conjunto detetado: ${eq.tipo} + ${componentNames}`, {
+            description: `Processando ${kitItems.length} itens em bloco.`
+          });
         }
       }
 
