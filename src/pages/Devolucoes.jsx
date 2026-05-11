@@ -23,6 +23,7 @@ import { CornerDownLeft } from 'lucide-react';
 import { gerarPDFDevolucao } from '@/utils/pdfGenerator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/lib/AuthContext';
+import { isMainEquipment } from '@/utils/kitUtils';
 
 const PROTECTED_EMAIL = 'pedro.mf.santos@outlook.pt';
 
@@ -207,92 +208,76 @@ export default function Devolucoes() {
         empId = selectedEmp.id;
       }
 
-      // 1. Criar Devolução
-      // IMPORTANTE: Mapear 'OK' para 'BOM ESTADO' temporariamente se a BD ainda não tiver o valor 'OK'
-      // Mas o erro 400 indica que a BD rejeitou "OK". Vamos usar "BOM ESTADO" que é o valor padrão equivalente no schema.sql
+      // IDENTIFICAR O KIT COMPLETO PARA A DEVOLUÇÃO
+      // 1. Obter o equipamento base para saber o imobilizado
+      const { data: baseEq } = await db.client.from('equipamentos').select('numero_imobilizado').eq('id', eqId).single();
+      const imob = baseEq?.numero_imobilizado?.trim();
+      
+      let kitItems = [];
+      if (imob) {
+        const { data: allKit } = await db.client.from('equipamentos').select('*').eq('numero_imobilizado', imob);
+        kitItems = allKit || [];
+      } else {
+        // Se não tem imobilizado, o kit é apenas o item atual
+        const { data: current } = await db.client.from('equipamentos').select('*').eq('id', eqId).single();
+        kitItems = [current];
+      }
+
+      // O item principal do kit para registar a avaria/devolução mestre
+      const mainEq = kitItems.find(isMainEquipment) || kitItems[0];
+
+      // 1. Criar Devolução (apenas uma para o conjunto)
       const payloadDevolucao = {
         emprestimo_id: empId,
-        equipamento_id: eqId,
+        equipamento_id: mainEq.id, // Registar no principal
         pessoa_id: pessoaId,
-        equipamento_info: eqInfo,
+        equipamento_info: kitItems.length > 1 ? `${eqInfo} (+ conjunto)` : eqInfo,
         pessoa_info: pessoaInfo,
         data_devolucao: hoje,
         estado_equipamento: estadoEquipamento === 'OK' ? 'BOM ESTADO' : estadoEquipamento,
-        notas,
+        notas: kitItems.length > 1 ? `${notas}\n(Devolução de conjunto com ${kitItems.length} itens via imobilizado ${imob})`.trim() : notas,
         documentos: docs,
         acessorios_devolvidos: acessoriosDevolvidos
       };
 
-      console.log('Enviando payload devolução:', payloadDevolucao);
-
       const devolucao = await db.entities.Devolucao.create(payloadDevolucao);
 
-      if (!devolucao || !devolucao.id) {
-        throw new Error('Falha ao obter ID da devolução criada.');
-      }
+      // 2. Processar Avaria e Estados para TODOS os itens do kit
+      for (const item of kitItems) {
+        // Atualizar estado do equipamento
+        const novoEstadoEq = estadoEquipamento === 'OK' ? 'Recondicionamento' : 'Manutenção';
+        await db.entities.Equipamento.update(item.id, { estado: novoEstadoEq });
 
-      // 2. Criar Avaria apenas se necessário e se o trigger não o fizer
-      // Só tentamos criar avaria se o estado NÃO for OK (BOM ESTADO)
-      if (estadoEquipamento !== 'OK') {
-        try {
-          // Pequena pausa para deixar o trigger do Supabase correr primeiro
-          await new Promise(resolve => setTimeout(resolve, 500));
+        // Se for avaria, criar uma para cada item (ou apenas para o principal? o utilizador disse conjunto vai para a mesma avaria)
+        // Vamos criar uma avaria por item para rastreio técnico individual, mas marcadas como conjunto
+        if (estadoEquipamento !== 'OK') {
+          const { data: maxAvaria } = await db.client.from('avarias').select('numero_avaria').order('numero_avaria', { ascending: false }).limit(1).maybeSingle();
+          const nextNumero = maxAvaria?.numero_avaria ? maxAvaria.numero_avaria + 1 : 1001;
           
-          // Verificar se a avaria já foi criada pelo trigger antes de tentar criar manualmente
-          const { data: existentes } = await requireSupabase()
-            .from('avarias')
-            .select('id')
-            .eq('equipamento_id', eqId)
-            .not('estado', 'in', '("ARRANJADO","INUTILIZADO")');
-
-          if (existentes && existentes.length > 0) {
-            console.log('Avaria já criada pelo trigger. Ignorando criação manual.');
-          } else {
-            // Obter o próximo número de avaria (max + 1)
-            const { data: maxAvaria } = await requireSupabase()
-              .from('avarias')
-              .select('numero_avaria')
-              .order('numero_avaria', { ascending: false })
-              .limit(1)
-              .maybeSingle();
-
-            const nextNumero = maxAvaria?.numero_avaria ? maxAvaria.numero_avaria + 1 : 1001;
-
-            await db.entities.Avaria.create({
-              numero_avaria: nextNumero,
-              equipamento_id: eqId,
-              equipamento_info: eqInfo,
-              origem: 'DEVOLUÇÃO',
-              devolucao_id: devolucao.id,
-              estado: 'A REVER',
-              componentes: { 
-                ecra: 'DESCONHECIDO', 
-                disco: 'DESCONHECIDO', 
-                ram: 'DESCONHECIDO', 
-                board: 'DESCONHECIDO', 
-                bateria: 'DESCONHECIDO', 
-                ventoinha: 'DESCONHECIDO',
-                teclado: 'DESCONHECIDO', 
-                touchpad: 'DESCONHECIDO' 
-              },
-              historico_estados: [{ tipo: 'estado', estado_novo: 'A REVER', data: new Date().toISOString(), utilizador: 'Sistema' }]
-            });
-          }
-        } catch (avariaError) {
-          console.warn('Erro controlado ao gerir avaria:', avariaError);
+          await db.entities.Avaria.create({
+            numero_avaria: nextNumero,
+            equipamento_id: item.id,
+            equipamento_info: `${item.tipo} ${item.marca} ${item.modelo}`.trim() || item.designacao,
+            origem: 'DEVOLUÇÃO',
+            devolucao_id: devolucao.id,
+            estado: 'A REVER',
+            diagnostico: kitItems.length > 1 ? `Avaria de conjunto (Imob: ${imob})` : 'A rever...',
+            componentes: { 
+              ecra: 'DESCONHECIDO', disco: 'DESCONHECIDO', ram: 'DESCONHECIDO', 
+              board: 'DESCONHECIDO', bateria: 'DESCONHECIDO', ventoinha: 'DESCONHECIDO',
+              teclado: 'DESCONHECIDO', touchpad: 'DESCONHECIDO' 
+            },
+            historico_estados: [{ tipo: 'estado', estado_novo: 'A REVER', data: new Date().toISOString(), utilizador: 'Sistema (Devolução Conjunto)' }]
+          });
         }
       }
 
-      // 3. Atualizar Empréstimo
+      // 3. Atualizar Empréstimo Base
       const empEstado = estadoEquipamento === 'OK' ? 'DEVOLVIDO' : (estadoEquipamento === 'COM DANOS' ? 'DANOS PARA REVISÃO' : 'PARA REVISÃO');
       await db.entities.Emprestimo.update(empId, { 
         estado: empEstado, 
-        notas_devolucao: notas 
+        notas_devolucao: kitItems.length > 1 ? `${notas} (Conjunto devolvido)`.trim() : notas 
       });
-
-      // 4. Atualizar Equipamento
-      const novoEstadoEq = estadoEquipamento === 'OK' ? 'Recondicionamento' : 'Manutenção';
-      await db.entities.Equipamento.update(eqId, { estado: novoEstadoEq });
 
       return { devolucao, eqInfo, pessoaInfo };
     },

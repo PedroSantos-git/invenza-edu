@@ -16,6 +16,7 @@ import SmartScanner from '@/components/shared/SmartScanner';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import ComponentSelector from '@/components/shared/ComponentSelector';
+import { groupEquipmentsIntoKits, isMainEquipment } from '@/utils/kitUtils';
 
 // Função utilitária para feedback sonoro
 const playSound = (type) => {
@@ -248,7 +249,7 @@ export default function Armazem() {
       setNotFound(false);
       
       let eq = null;
-      // Procurar apenas por Número de Série (Insensível a maiúsculas/minúsculas)
+      // 1. Procurar por Número de Série (Insensível a maiúsculas/minúsculas)
       const { data: eqsBySerie } = await db.client
         .from('equipamentos')
         .select('*')
@@ -257,6 +258,19 @@ export default function Armazem() {
 
       if (eqsBySerie && eqsBySerie.length > 0) {
         eq = eqsBySerie[0];
+      }
+
+      // 2. Se não encontrou por S/N, procurar por Número de Imobilizado
+      if (!eq) {
+        const { data: eqsByImob } = await db.client
+          .from('equipamentos')
+          .select('*')
+          .ilike('numero_imobilizado', cleanValue)
+          .limit(1);
+
+        if (eqsByImob && eqsByImob.length > 0) {
+          eq = eqsByImob[0];
+        }
       }
 
       if (!eq) {
@@ -292,103 +306,125 @@ export default function Armazem() {
 
       // Lógica de Entrada/Saída
       const newSituacao = actionType === 'EXIT' ? 'Fora de armazém' : 'Em armazém';
-      const alreadyInState = eq.situacao_armazem === newSituacao;
-      let avariaCriada = null;
       
-      // Lógica especial para Entrada com Avaria
-      if (actionType === 'ENTRY_DAMAGE') {
-        // Verificar se existe avaria aberta
-        const { data: avariasAbertas } = await db.client
-          .from('avarias')
+      // Identificar todo o conjunto (Kit)
+      let kitItems = [eq];
+      const imob = eq.numero_imobilizado?.trim();
+      
+      if (imob) {
+        const { data: siblings } = await db.client
+          .from('equipamentos')
           .select('*')
-          .eq('equipamento_id', eq.id)
-          .not('estado', 'in', '("ARRANJADO","INUTILIZADO")');
-
-        if (avariasAbertas && avariasAbertas.length > 0) {
-          console.log('Equipamento já tem avaria aberta. Fazendo apenas entrada.');
-          avariaCriada = avariasAbertas[0];
-          if (!alreadyInState) {
-            toast.info('Equipamento já possui uma avaria ativa. Entrada registada.');
-          }
-        } else {
-          console.log('Criando nova avaria para entrada com danos.');
-          const eqNome = `${eq.tipo} ${eq.marca} ${eq.modelo}`.trim() || eq.designacao;
-          
-          // Obter o próximo número de avaria (max + 1)
-          const { data: maxAvaria } = await db.client
-            .from('avarias')
-            .select('numero_avaria')
-            .order('numero_avaria', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-          const nextNumero = maxAvaria?.numero_avaria ? maxAvaria.numero_avaria + 1 : 1001;
-
-          avariaCriada = await db.entities.Avaria.create({
-            numero_avaria: nextNumero,
-            equipamento_id: eq.id,
-            equipamento_info: eqNome,
-            origem: 'DIRETA',
-            estado: 'A REVER',
-            diagnostico: 'A rever....',
-            componentes: { 
-              ecra: 'DESCONHECIDO', disco: 'DESCONHECIDO', ram: 'DESCONHECIDO',
-              board: 'DESCONHECIDO', bateria: 'DESCONHECIDO', ventoinha: 'DESCONHECIDO',
-              teclado: 'DESCONHECIDO', touchpad: 'DESCONHECIDO'
-            },
-            historico_estados: [{
-              tipo: 'estado',
-              estado_novo: 'A REVER',
-              data: new Date().toISOString(),
-              utilizador: user?.full_name || user?.email || 'Sistema (Armazém)'
-            }]
-          });
-          toast.warning(`Nova avaria #${avariaCriada.numero_avaria} aberta.`);
+          .eq('numero_imobilizado', imob)
+          .neq('id', eq.id);
+        
+        if (siblings && siblings.length > 0) {
+          kitItems = [...kitItems, ...siblings];
+          console.log(`Conjunto detetado com ${kitItems.length} itens para o imobilizado ${imob}`);
         }
       }
 
-      console.log(`Atualizando equipamento ${eq.id} para ${newSituacao}`);
+      // Se houver um kit, o "Mestre" (PC) deve ser o que manda na informação visual
+      const mainEq = kitItems.find(isMainEquipment) || eq;
 
-      // Se for entrada com avaria, o estado do equipamento passa a Manutenção (se não estiver já)
-      const updatePayload = {
-        situacao_armazem: newSituacao
-      };
+      let avariaCriada = null;
+      
+      // Processar todos os itens do kit
+      for (const item of kitItems) {
+        const alreadyInState = item.situacao_armazem === newSituacao;
+        
+        // Lógica especial para Entrada com Avaria (apenas no item principal ou no item lido se não houver principal)
+        if (actionType === 'ENTRY_DAMAGE' && (item.id === mainEq.id || (kitItems.length === 1))) {
+          // Verificar se existe avaria aberta para este item
+          const { data: avariasAbertas } = await db.client
+            .from('avarias')
+            .select('*')
+            .eq('equipamento_id', item.id)
+            .not('estado', 'in', '("ARRANJADO","INUTILIZADO")');
 
-      if (!alreadyInState) {
-        const historyEntry = {
-          data: new Date().toISOString(),
-          tipo: actionType === 'EXIT' ? 'SAÍDA' : 'ENTRADA',
-          utilizador: user?.full_name || user?.email || 'Sistema'
+          if (avariasAbertas && avariasAbertas.length > 0) {
+            avariaCriada = avariasAbertas[0];
+          } else {
+            const eqNome = `${item.tipo} ${item.marca} ${item.modelo}`.trim() || item.designacao;
+            const { data: maxAvaria } = await db.client
+              .from('avarias')
+              .select('numero_avaria')
+              .order('numero_avaria', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            const nextNumero = maxAvaria?.numero_avaria ? maxAvaria.numero_avaria + 1 : 1001;
+
+            avariaCriada = await db.entities.Avaria.create({
+              numero_avaria: nextNumero,
+              equipamento_id: item.id,
+              equipamento_info: eqNome,
+              origem: 'DIRETA',
+              estado: 'A REVER',
+              diagnostico: 'A rever (Entrada em Bloco)',
+              componentes: { 
+                ecra: 'DESCONHECIDO', disco: 'DESCONHECIDO', ram: 'DESCONHECIDO',
+                board: 'DESCONHECIDO', bateria: 'DESCONHECIDO', ventoinha: 'DESCONHECIDO',
+                teclado: 'DESCONHECIDO', touchpad: 'DESCONHECIDO'
+              },
+              historico_estados: [{
+                tipo: 'estado',
+                estado_novo: 'A REVER',
+                data: new Date().toISOString(),
+                utilizador: user?.full_name || user?.email || 'Sistema (Armazém)'
+              }]
+            });
+          }
+        }
+
+        // Se for entrada com avaria, todos os itens do kit vão para Manutenção
+        const updatePayload = {
+          situacao_armazem: newSituacao
         };
-        updatePayload.historico_armazem = [historyEntry, ...(eq.historico_armazem || [])];
+
+        if (!alreadyInState) {
+          const historyEntry = {
+            data: new Date().toISOString(),
+            tipo: actionType === 'EXIT' ? 'SAÍDA' : 'ENTRADA',
+            utilizador: user?.full_name || user?.email || 'Sistema'
+          };
+          updatePayload.historico_armazem = [historyEntry, ...(item.historico_armazem || [])];
+        }
+
+        if (actionType === 'ENTRY_DAMAGE') {
+          updatePayload.estado = 'Manutenção';
+        }
+
+        await db.entities.Equipamento.update(item.id, updatePayload);
       }
 
-      if (actionType === 'ENTRY_DAMAGE') {
-        updatePayload.estado = 'Manutenção';
-      }
+      // Atualizar dados para o feedback visual usando o item principal
+      const { data: updatedMain } = await db.client
+        .from('equipamentos')
+        .select('*')
+        .eq('id', mainEq.id)
+        .single();
 
-      // Atualizar na base de dados
-      const updatedData = await db.entities.Equipamento.update(eq.id, updatePayload);
-
-      if (updatedData) {
+      if (updatedMain) {
         setLastAction({ 
           type: actionType === 'EXIT' ? 'SAÍDA' : (actionType === 'ENTRY_DAMAGE' ? 'ENTRADA_AVARIA' : 'ENTRADA'), 
-          eq: updatedData,
-          avaria: avariaCriada
+          eq: updatedMain,
+          avaria: avariaCriada,
+          isKit: kitItems.length > 1,
+          kitCount: kitItems.length
         });
-        setSelectedEq(updatedData);
+        setSelectedEq(updatedMain);
         
-        // Inicializar componentes para edição se for entrada com avaria
         if (actionType === 'ENTRY_DAMAGE' && avariaCriada) {
           setEditingComponents(avariaCriada.componentes || {});
         } else {
           setEditingComponents(null);
         }
         
-        if (actionType === 'EXIT') {
-          toast.success(alreadyInState ? 'Equipamento já se encontra fora de armazém' : 'Saída registada com sucesso');
-        } else if (actionType === 'ENTRY') {
-          toast.success(alreadyInState ? 'Equipamento já se encontra em armazém' : 'Entrada registada com sucesso');
+        if (kitItems.length > 1) {
+          toast.success(`Conjunto de ${kitItems.length} itens processado com sucesso`);
+        } else {
+          toast.success('Equipamento processado com sucesso');
         }
       }
 

@@ -21,6 +21,7 @@ import { toast } from 'sonner';
 import { gerarPDFEquipamento } from '@/utils/pdfGenerator';
 import { useAuth } from '@/lib/AuthContext';
 import { format } from 'date-fns';
+import { groupEquipmentsIntoKits, isMainEquipment } from '@/utils/kitUtils';
 
 const PROTECTED_EMAIL = 'pedro.mf.santos@outlook.pt';
 
@@ -117,6 +118,8 @@ export default function Equipamentos() {
       return matchSearch && matchEstado && matchTipo && matchArmazem;
     });
 
+  const groupedEquipamentos = React.useMemo(() => groupEquipmentsIntoKits(filtered), [filtered]);
+
   const handlePDF = (eq, e) => {
     e.stopPropagation();
     gerarPDFEquipamento(eq, pdfTemplates);
@@ -201,16 +204,33 @@ export default function Equipamentos() {
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">A carregar...</TableCell></TableRow>
-            ) : filtered.length === 0 ? (
-              <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhum equipamento encontrado</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">A carregar...</TableCell></TableRow>
+            ) : groupedEquipamentos.length === 0 ? (
+              <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhum equipamento encontrado</TableCell></TableRow>
             ) : (
-              filtered.map(eq => (
+              groupedEquipamentos.map(eq => (
                 <TableRow key={eq.id} className="hover:bg-muted/30 cursor-pointer" onClick={() => { setSelected(eq); setDetailOpen(true); }}>
-                  <TableCell className="font-mono text-xs">{eq.numero_serie}</TableCell>
-                  <TableCell className="text-sm font-medium">{eq.numero_imobilizado || '-'}</TableCell>
+                  <TableCell className="font-mono text-xs">
+                    {eq.numero_serie}
+                    {eq.isKit && eq.kitData.components.length > 0 && (
+                      <div className="text-[10px] text-blue-600 font-bold mt-1">
+                        + {eq.kitData.components.length} item(ns)
+                      </div>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-sm font-medium">
+                    {eq.numero_imobilizado || '-'}
+                    {eq.isKit && <Badge variant="secondary" className="ml-2 text-[10px] h-4 bg-blue-50 text-blue-700 border-blue-200">KIT</Badge>}
+                  </TableCell>
                   <TableCell className="text-sm">
-                    {`${eq.tipo || ''} ${eq.marca || ''} ${eq.modelo || ''}`.trim() || '-'}
+                    <div className="flex flex-col">
+                      <span className="font-medium">{`${eq.tipo || ''} ${eq.marca || ''} ${eq.modelo || ''}`.trim() || '-'}</span>
+                      {eq.isKit && eq.kitData.componentTypes && (
+                        <span className="text-[10px] text-muted-foreground truncate max-w-[200px]">
+                          Inc: {eq.kitData.componentTypes}
+                        </span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="text-sm">
                     {eq.data_entrada ? format(new Date(eq.data_entrada), 'dd/MM/yyyy') : '-'}

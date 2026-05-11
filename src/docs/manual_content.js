@@ -33,7 +33,14 @@ export const MANUAL_CONTENT = {
     content: `
       Esta página é onde regista e controla cada unidade física de hardware.
       
+      ### Gestão de Conjuntos (Kits) por Imobilizado (Novo):
+      O sistema agora agrupa automaticamente equipamentos que partilham o mesmo **Número de Imobilizado**.
+      - **Equipamento Principal**: Se um conjunto tiver um item do tipo "PC...", este será considerado o item principal (líder) do kit.
+      - **Agrupamento Visual**: Na listagem, verá apenas o equipamento principal. Um indicador azul (ex: \`+ 2 item(ns)\`) mostra que existem acessórios (como Hotspots ou Malas) associados a esse imobilizado.
+      - **Pesquisa Inteligente**: Se pesquisar pelo Número de Série de um acessório, o sistema encontrará o conjunto correspondente.
+
       ### Regras de Negócio e Estados:
+      - **Sincronização de Conjuntos**: Qualquer alteração de estado (Empréstimo, Devolução, Avaria) num item do kit reflete-se automaticamente em todos os outros itens com o mesmo imobilizado.
       - **Gestão Automática de Estados**: Por questões de integridade, não pode alterar manualmente o estado de um equipamento para **Aluno**, **Docente** ou **Manutenção**.
         - O estado muda para **Aluno/Docente** quando formaliza um Empréstimo.
         - O estado muda para **Manutenção** quando regista uma Avaria ou recebe uma Devolução com problemas.
@@ -47,9 +54,6 @@ export const MANUAL_CONTENT = {
       4. **Uso do Smart Scanner**: Em qualquer campo (especialmente S/N), clique no ícone da câmara para ler o texto diretamente de uma etiqueta física.
       4. **Anexar Documentos**: Na edição de um equipamento, pode carregar faturas, termos de garantia ou fotos do estado físico.
       5. **Filtrar por Armazém**: Utilize o novo filtro de armazém para listar rapidamente apenas o material que está fisicamente na escola.
-
-      ### O que esperar:
-      - Ao pesquisar, pode usar termos parciais (ex: "HP 440") para encontrar rapidamente modelos específicos.
     `
   },
   '/pessoas': {
@@ -82,41 +86,16 @@ export const MANUAL_CONTENT = {
     content: `
       Módulo para atribuir equipamentos a pessoas.
       
+      ### Empréstimo de Conjuntos (Novo):
+      Ao selecionar um PC para empréstimo, o sistema deteta automaticamente todos os acessórios associados ao mesmo **Número de Imobilizado** (ex: Hotspot, Mala).
+      - O empréstimo é formalizado como uma unidade única.
+      - Todos os itens do conjunto mudam automaticamente para o estado do beneficiário (**Aluno** ou **Docente**).
+      - O Auto de Entrega gerado incluirá a menção ao conjunto detetado.
+
       ### Como realizar um empréstimo:
       1. **Identificar a Pessoa**: Pesquise pelo Nome ou NIF. O sistema impede empréstimos a pessoas inativas.
-      2. **Selecionar Equipamento**: O sistema apenas mostrará equipamentos que estejam "Disponíveis" (Rececionado ou Recondicionamento).
+      2. **Selecionar Equipamento**: O sistema apenas mostrará equipamentos que estejam "Disponíveis" (Rececionado ou Recondicionamento). No caso de conjuntos, selecione o PC correspondente.
       3. **Formalizar**: Clique em "Concluir Empréstimo".
-
-      ### Gestão de Documentos e Scanner PDF:
-      Ao realizar um empréstimo ou editar um registo, pode anexar documentos:
-      - **Ficheiros**: Upload de documentos existentes (PDF, Word, Imagens).
-      - **Foto**: Captura direta de uma fotografia (útil em dispositivos móveis).
-      - **Scanner PDF**: Permite tirar múltiplas fotos de um documento físico e gerar automaticamente um único ficheiro PDF otimizado. Ideal para digitalizar declarações assinadas no momento.
-      
-      ### Importação de Autos (Novo):
-      Pode agora criar empréstimos em massa a partir de ficheiros Word (.docx) dos Autos de Entrega:
-      1. Clique em **Importar Auto**.
-      2. Selecione **um ou mais ficheiros** Word.
-      3. O sistema analisa cada documento, identifica o **Número de Série** e o **NIF** do aluno/docente.
-      4. **Regras de Importação**:
-         - São permitidos equipamentos nos estados: **Escola**, **Recondicionamento** ou **Rececionado**.
-         - **Verificação de Duplicados**:
-           - Se o equipamento já estiver no estado **Aluno** ou **Docente**, o sistema verifica se o empréstimo ativo pertence à mesma pessoa do ficheiro.
-           - Se for a mesma pessoa, o registo é marcado como "Já importado".
-           - Se for uma pessoa diferente, o registo é marcado como erro ("Já possui empréstimo ativo com outra pessoa").
-         - **Auto-Upload e Renomeação (Novo)**: Durante a importação, o ficheiro Word é enviado automaticamente para a ficha do empréstimo. O sistema renomeia o ficheiro para um formato padrão (\`Auto_Entrega_[SN]_[Nome].docx\`) para facilitar a organização. Se o empréstimo já existia mas não tinha o documento, o sistema anexa-o agora.
-         - **Sugestões Inteligentes (Novo)**: Se um equipamento não for encontrado pelo S/N exato, o sistema tenta detetar erros de digitação (troca de letras ou números, incluindo trocas de posição como "5CG" para "5GC"). Nestes casos, o sistema sugere o equipamento mais provável e permite-lhe confirmar a correção e criar o empréstimo com um clique no resumo final.
-         - **Exportação de Falhas e Relatórios (Novo)**: No final da importação, pode descarregar um ficheiro ZIP com os documentos que falharam e também um **Relatório PDF detalhado** com todo o histórico da operação para fins de arquivo ou conferência manual.
-         - **Impressão em Massa de Autos (Novo)**: No final da importação, pode selecionar os empréstimos criados com sucesso e gerar um único PDF contendo todos os Autos de Entrega prontos para impressão.
-         - No final, será apresentado um **Resumo da Importação** detalhando os sucessos, as sugestões e os motivos de falha para cada ficheiro.
-
-      ### Notificações de Devolução (Novo):
-      - Clique no botão **Notificações** no topo da página para aceder à ferramenta de envio em massa de pedidos de devolução.
-      - Esta ferramenta é ideal para o final do ano letivo ou cessação de contratos.
-
-      ### O que acontece no sistema:
-      - O estado do equipamento muda instantaneamente para **Aluno** ou **Docente**.
-      - É criado um registo histórico que não pode ser apagado, apenas encerrado via Devolução.
     `
   },
   '/notificacoes-devolucao': {
@@ -146,12 +125,17 @@ export const MANUAL_CONTENT = {
     content: `
       Processo crítico de retorno de material ao stock.
       
+      ### Devolução de Conjuntos (Novo):
+      Ao ler o Número de Série ou Imobilizado de qualquer item de um conjunto, o sistema identifica automaticamente o kit completo.
+      - **Ação em Bloco**: Ao processar a devolução, todos os itens do imobilizado são devolvidos em simultâneo.
+      - **Sincronização de Estado**: O novo estado operacional (Recondicionamento ou Manutenção) é aplicado a todos os componentes do kit.
+      - **Registo de Avarias**: Se selecionar "Com Problemas", o sistema abre uma avaria para cada item do conjunto para permitir um rastreio técnico individual, mas vinculadas ao mesmo processo de devolução.
+
       ### Passos para Devolução:
       1. **Pesquisa**: Introduza o Número de Série do equipamento ou o NIF da pessoa.
       2. **Verificação de Estado**:
-         - **OK (Novo)**: Utilize quando o equipamento é devolvido em perfeitas condições. O sistema marca o equipamento como **Recondicionamento** (disponível para novo empréstimo) e **não abre avaria**.
-         - **A Rever (Padrão)**: O equipamento necessita de uma verificação técnica simples antes de ser disponibilizado. Abre automaticamente uma Avaria.
-         - **Com Problemas / Danos**: Utilize para danos visíveis. Abre automaticamente uma Avaria e coloca o equipamento em Manutenção.
+         - **OK**: Utilize quando o conjunto é devolvido em perfeitas condições. O sistema marca os equipamentos como **Recondicionamento** (disponível para novo empréstimo) e **não abre avaria**.
+         - **Com Problemas / Danos**: Utilize para danos visíveis. Abre automaticamente Avarias e coloca o conjunto em Manutenção.
       
       ### Regras Importantes:
       - Uma devolução com problemas marca o empréstimo original como "Entregue com Danos" no histórico da pessoa.
@@ -162,31 +146,14 @@ export const MANUAL_CONTENT = {
     content: `
       Fluxo de trabalho para reparação de equipamentos.
       
+      ### Visualização Agrupada por Conjunto (Novo):
+      No ecrã de listagem, as avarias são agora agrupadas pelo **Número de Imobilizado**.
+      - Verá apenas uma entrada principal (geralmente o PC) com a indicação de que se trata de um **CONJUNTO**.
+      - Ao resolver ou alterar o estado da avaria principal, o técnico deve estar ciente de que todos os itens do kit estão em processo de manutenção.
+
       ### Filtros de Trabalho:
       - **Pendentes (Default)**: Mostra tudo o que requer atenção técnica (A Rever, Diagnosticado, Em Reparação, Aguarda Peças).
       - **Todos os Estados**: Inclui o histórico de reparações concluídas ou equipamentos abatidos.
-
-      ### Ciclo de Vida de uma Avaria:
-      1. **A Rever**: Estado inicial após registo ou devolução com danos.
-      2. **Diagnosticado/Em Reparação**: Para controlo interno do técnico.
-      3. **Aguarda Peças**: Quando a reparação depende de fornecedores externos.
-      4. **Arranjado**: Ao selecionar este estado, o equipamento passa para **Recondicionamento**.
-      5. **Inutilizado**: Se a reparação for inviável, o equipamento é marcado como "Inutilizado" e sai do inventário ativo.
-
-      ### Importação de Avarias (Novo):
-      Pode agora importar avarias em massa a partir de um ficheiro Excel (.xlsx):
-      - **Identificação**: O sistema procura o equipamento pelo "Nº Série". Se não encontrar, tenta pelo "Nº Imobilizado".
-      - **Filtro de Resolução**: Registos com a coluna "Resolução" preenchida como "ARRANJADO" são ignorados automaticamente.
-      - **Diagnóstico**: O campo de diagnóstico é formado pela junção das colunas "Info" e "Diagnóstico resolução".
-      - **Componentes**: O estado dos componentes (Ecrã, Disco, RAM, etc.) é mapeado automaticamente: "ok" vira **OK**, "x" vira **Avariado** e "?" mantém-se como **?**.
-      - **Estado Inicial**: Todas as avarias importadas entram no estado **A Rever** e colocam o equipamento automaticamente em **Manutenção**.
-
-      ### Pesquisa de Componentes em Equipamentos (Antiga "Pesquisa Inutilizados"):
-      Esta ferramenta avançada permite encontrar peças de substituição em todo o parque informático:
-      1. Clique em **Pesquisar Inutilizados** (agora abrangente).
-      2. Selecione o estado dos componentes que procura (ex: Ecrã "OK", Disco "Avariado").
-      3. O sistema lista todos os equipamentos que cumprem estes critérios, **exceto** aqueles que já estão marcados como **Arranjado** (pois esses estão prontos para uso integral).
-      4. Esta pesquisa é ideal para encontrar, por exemplo, um ecrã funcional num portátil que tem a board avariada e está parado em manutenção ou inutilizado.
     `
   },
   '/listas': {
@@ -215,26 +182,16 @@ export const MANUAL_CONTENT = {
     content: `
       Módulo dedicado ao controlo físico de entrada e saída de equipamentos do armazém da escola.
       
+      ### Movimentação de Conjuntos (Novo):
+      O armazém é agora inteligente na deteção de kits.
+      - **Leitura de S/N ou Imobilizado**: Ao ler qualquer item de um conjunto, o sistema identifica todos os "irmãos" que partilham o mesmo número de imobilizado.
+      - **Ação em Bloco**: Ao confirmar uma **Entrada**, **Saída** ou **Entrada com Avaria**, a ação é aplicada automaticamente a todos os itens do conjunto.
+      - **Feedback Visual**: O sistema informa quantos itens foram processados no conjunto (ex: "Conjunto de 3 itens processado com sucesso").
+
       ### Funcionalidades Principais:
-      - **Entrada em Armazém**: Utilize este campo para ler o Número de Série ou Imobilizado de um equipamento que acaba de chegar ou ser devolvido ao armazém. Ao premir Enter, o equipamento é marcado como "Em armazém".
-      - **Entrada com Avaria (Novo)**: Utilize quando o equipamento é devolvido com danos visíveis ou problemas técnicos. 
-        - Ao premir Enter, o equipamento é marcado como "Em armazém" e o seu estado operacional passa para **Manutenção**.
-        - É aberta automaticamente uma nova avaria (ou associada a uma já aberta).
-        - O sistema exibe o **Número da Avaria** em destaque e o seu **Estado**.
-        - Pode verificar e editar o estado dos **Componentes** (Ecrã, Disco, RAM, etc.) diretamente nesta página e clicar em "Gravar Componentes".
-        - O botão **Editar** permite saltar diretamente para a ficha detalhada da avaria no módulo de Avarias.
-      - **Saída de Armazém**: Utilize este campo quando um equipamento sai fisicamente do armazém (ex: para ser entregue ou para reparação externa). Ao premir Enter, o equipamento é marcado como "Fora de armazém".
-      - **Pesquisa Rápida**: Permite consultar a situação atual e o histórico de um equipamento sem alterar o seu estado.
-
-      ### Histórico e Inventário (Novo):
-      - **Exportar Inventário**: Clique em **Exportar** para gerar um ficheiro Excel com todos os equipamentos que estão "Em armazém" ou "Fora de armazém". Este ficheiro é ideal para auditorias físicas.
-      - **Importação em Massa**: Pode atualizar a situação de vários equipamentos de uma só vez:
-        1. Prepare um ficheiro Excel com as colunas "S/N" (ou Imobilizado) e "Situação Armazém".
-        2. A coluna "Situação Armazém" deve conter exatamente o texto "Em armazém" ou "Fora de armazém".
-        3. Clique em **Importar** e selecione o ficheiro. O sistema atualizará os registos e criará as respetivas entradas no histórico de cada equipamento.
-
-      ### Dica de Eficiência:
-      - Os campos de leitura rápida são limpos automaticamente após cada leitura bem-sucedida, permitindo processar dezenas de equipamentos rapidamente usando um leitor de códigos de barras.
+      1. **Entrada em Armazém**: Regista a chegada física. O conjunto passa para "Em armazém".
+      2. **Entrada com Avaria**: Regista a chegada com danos. O conjunto passa para "Em armazém" e o estado operacional de todos os itens muda para **Manutenção**.
+      3. **Saída de Armazém**: Regista a saída física para o utilizador ou reparação externa.
     `
   },
   '/pedidos': {

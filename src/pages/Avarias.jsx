@@ -15,6 +15,7 @@ import SmartScanner from '@/components/shared/SmartScanner';
 import AvariaForm from '@/components/avarias/AvariaForm';
 import AvariaDetail from '@/components/avarias/AvariaDetail';
 import EquipamentoDetail from '@/components/equipamentos/EquipamentoDetail';
+import { groupEquipmentsIntoKits, isMainEquipment } from '@/utils/kitUtils';
 import { format, isValid, parse } from 'date-fns';
 import { gerarPDFAvaria, gerarRelatorioImportacaoAvariasPDF } from '@/utils/pdfGenerator';
 import { toast } from 'sonner';
@@ -128,29 +129,81 @@ export default function Avarias() {
     const eq = equipamentoById.get(a.equipamento_id);
     const equipamentoLabel = formatEquipamento(eq) || a.equipamento_info || a.designacao || '—';
     const equipamentoSn = eq?.numero_serie || a.equipamento_sn || a.numero_serie || '—';
-    return { ...a, equipamentoLabel, equipamentoSn };
+    return { ...a, equipamentoLabel, equipamentoSn, numero_imobilizado: eq?.numero_imobilizado };
   });
 
-  const filtered = avariasDecoradas.filter(a => {
-    const matchSearch = !search || [
-      a.equipamentoLabel,
-      a.equipamentoSn,
-      a.diagnostico,
-      a.numero_avaria?.toString(),
-      `#${a.numero_avaria?.toString().padStart(4, '0')}`
-    ].some(f => f?.toLowerCase().includes(search.toLowerCase()));
-    
-    let matchEstado = false;
-    if (filtroEstado === 'todos') {
-      matchEstado = true;
-    } else if (filtroEstado === 'pendentes') {
-      matchEstado = ['A REVER', 'DIAGNOSTICADO', 'EM REPARAÇÃO', 'AGUARDA PEÇAS'].includes(a.estado);
-    } else {
-      matchEstado = a.estado === filtroEstado;
-    }
-    
-    return matchSearch && matchEstado;
-  });
+  const groupedAvarias = React.useMemo(() => {
+    const avs = avariasDecoradas.filter(a => {
+      const matchSearch = !search || [
+        a.equipamentoLabel,
+        a.equipamentoSn,
+        a.diagnostico,
+        a.numero_avaria?.toString(),
+        `#${a.numero_avaria?.toString().padStart(4, '0')}`
+      ].some(f => f?.toLowerCase().includes(search.toLowerCase()));
+      
+      let matchEstado = false;
+      if (filtroEstado === 'todos') {
+        matchEstado = true;
+      } else if (filtroEstado === 'pendentes') {
+        matchEstado = ['A REVER', 'DIAGNOSTICADO', 'EM REPARAÇÃO', 'AGUARDA PEÇAS'].includes(a.estado);
+      } else {
+        matchEstado = a.estado === filtroEstado;
+      }
+      
+      return matchSearch && matchEstado;
+    });
+
+    // Agrupar avarias por imobilizado
+    const kits = new Map();
+    const individual = [];
+
+    avs.forEach(av => {
+      const imob = av.numero_imobilizado?.trim();
+      if (!imob) {
+        individual.push({ ...av, isKitAvaria: false });
+        return;
+      }
+
+      if (!kits.has(imob)) {
+        kits.set(imob, {
+          imobilizado: imob,
+          main: null,
+          all: [],
+          isKitAvaria: true
+        });
+      }
+      
+      const kit = kits.get(imob);
+      kit.all.push(av);
+
+      // Tentar encontrar a avaria do PC como principal
+      const eq = equipamentoById.get(av.equipamento_id);
+      if (isMainEquipment(eq)) {
+        kit.main = av;
+      }
+    });
+
+    const groupedKits = Array.from(kits.values()).map(kit => {
+      const main = kit.main || kit.all[0];
+      return {
+        ...main,
+        isKitAvaria: true,
+        kitAvariaData: {
+          count: kit.all.length,
+          siblings: kit.all.filter(a => a.id !== main.id)
+        }
+      };
+    });
+
+    return [...groupedKits, ...individual].sort((a, b) => {
+      // Manter a ordenação original do estado sort
+      const valA = a[sort.column];
+      const valB = b[sort.column];
+      if (sort.ascending) return valA > valB ? 1 : -1;
+      return valA < valB ? 1 : -1;
+    });
+  }, [avariasDecoradas, search, filtroEstado, sort, equipamentoById]);
 
   const handleSearchInutilizados = () => {
     setIsSearching(true);
@@ -444,9 +497,9 @@ export default function Avarias() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Avarias</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {filtered.length === (avarias?.length || 0)
+            {groupedAvarias.length === (avarias?.length || 0)
               ? `${avarias.filter(a => !['ARRANJADO', 'INUTILIZADO'].includes(a.estado)).length} avaria(s) aberta(s)`
-              : `${filtered.length} de ${avarias?.length || 0} avaria(s) (filtrado)`}
+              : `${groupedAvarias.length} de ${avarias?.length || 0} registo(s) (agrupado)`}
           </p>
         </div>
         <div className="flex gap-2">
@@ -518,16 +571,23 @@ export default function Avarias() {
           <TableBody>
             {isLoading ? (
               <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">A carregar...</TableCell></TableRow>
-            ) : filtered.length === 0 ? (
+            ) : groupedAvarias.length === 0 ? (
               <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhuma avaria encontrada</TableCell></TableRow>
             ) : (
-              filtered.map(av => (
+              groupedAvarias.map(av => (
                 <TableRow key={av.id} className="hover:bg-muted/30 cursor-pointer" onClick={() => { setSelected(av); setDetailOpen(true); }}>
                   <TableCell className="font-mono text-xs font-bold text-muted-foreground">
                     #{av.numero_avaria?.toString().padStart(4, '0') || '—'}
                   </TableCell>
                   <TableCell className="font-medium">
-                    {av.equipamentoLabel || '—'}
+                    <div className="flex flex-col">
+                      <span>{av.equipamentoLabel || '—'}</span>
+                      {av.isKitAvaria && av.kitAvariaData.count > 1 && (
+                        <span className="text-[10px] text-blue-600 font-bold">
+                          CONJUNTO (+ {av.kitAvariaData.count - 1} itens)
+                        </span>
+                      )}
+                    </div>
                     {av.equipamento_com_problemas && <span className="ml-2 text-xs text-red-600 font-bold">⚠</span>}
                   </TableCell>
                   <TableCell className="font-mono text-xs">{av.equipamentoSn}</TableCell>

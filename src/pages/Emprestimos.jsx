@@ -28,6 +28,7 @@ import { useAuth } from '@/lib/AuthContext';
 import mammoth from 'mammoth';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
+import { groupEquipmentsIntoKits, isMainEquipment } from '@/utils/kitUtils';
 
 const PROTECTED_EMAIL = 'pedro.mf.santos@outlook.pt';
 
@@ -207,6 +208,25 @@ export default function Emprestimos() {
   const createMutation = useMutation({
     mutationFn: async () => {
       const eqNome = `${selectedEq.tipo} ${selectedEq.marca} ${selectedEq.modelo}`.trim() || selectedEq.designacao;
+      
+      // Identificar o kit completo para o empréstimo
+      let kitItems = [selectedEq];
+      const imob = selectedEq.numero_imobilizado?.trim();
+      
+      if (imob) {
+        const { data: siblings } = await db.client
+          .from('equipamentos')
+          .select('*')
+          .eq('numero_imobilizado', imob)
+          .neq('id', selectedEq.id)
+          .in('estado', ['Rececionado', 'Recondicionamento']);
+        
+        if (siblings && siblings.length > 0) {
+          kitItems = [...kitItems, ...siblings];
+        }
+      }
+
+      // Criar o registo de empréstimo (aponta para o item principal selecionado)
       const emp = await db.entities.Emprestimo.create({
         equipamento_id: selectedEq.id,
         pessoa_id: selectedPessoa.id,
@@ -214,15 +234,23 @@ export default function Emprestimos() {
         pessoa_info: selectedPessoa.nome,
         data_emprestimo: new Date().toISOString().split('T')[0],
         estado: 'ATIVO',
-        notas_entrega: notas,
+        notas_entrega: kitItems.length > 1 
+          ? `${notas}\n(Conjunto com ${kitItems.length} itens detetado via imobilizado ${imob})`.trim()
+          : notas,
         acessorios_entregues: acessorios,
         autorizacao_ee: autorizacaoEE,
         ee_levanta: eeLevanta,
         inserido_sistema: inseridoSistema,
         documentos_entrega: docs
       });
+
+      // Atualizar o estado de TODOS os itens do kit
       const estadoEquipamento = selectedPessoa.tipo === 'Aluno' ? 'Aluno' : 'Docente';
-      await db.entities.Equipamento.update(selectedEq.id, { estado: estadoEquipamento });
+      
+      for (const item of kitItems) {
+        await db.entities.Equipamento.update(item.id, { estado: estadoEquipamento });
+      }
+
       return emp;
     },
     onSuccess: (emp) => {
@@ -373,9 +401,11 @@ export default function Emprestimos() {
     };
   });
 
-  const filteredEq = equipamentosDisponiveis.filter(e =>
+  const filteredEqRaw = equipamentosDisponiveis.filter(e =>
     eqSearch === '' || [e.numero_serie, e.designacao, e.marca, e.modelo].some(f => f?.toLowerCase().includes(eqSearch.toLowerCase()))
   );
+
+  const filteredEq = React.useMemo(() => groupEquipmentsIntoKits(filteredEqRaw), [filteredEqRaw]);
 
   const filteredPessoas = pessoas.filter(p =>
     (pessoaSearch === '' || [p.nome, p.email, p.turma, p.nif, p.telefone].some(f => f?.toLowerCase().includes(pessoaSearch.toLowerCase())))
@@ -840,7 +870,14 @@ export default function Emprestimos() {
                     <div className="max-h-40 overflow-y-auto space-y-1">
                       {filteredEq.map(eq => (
                         <button key={eq.id} onClick={() => setSelectedEq(eq)} className="w-full text-left p-2 rounded hover:bg-muted text-sm flex justify-between items-center">
-                          <span>{eq.designacao} — {eq.numero_serie}</span>
+                          <div className="flex flex-col">
+                            <span className="font-medium">{eq.designacao} — {eq.numero_serie}</span>
+                            {eq.isKit && eq.kitData.componentTypes && (
+                              <span className="text-[10px] text-blue-600 font-bold">
+                                KIT (+ {eq.kitData.components.length} itens: {eq.kitData.componentTypes})
+                              </span>
+                            )}
+                          </div>
                           <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground uppercase font-bold">{eq.estado}</span>
                         </button>
                       ))}
