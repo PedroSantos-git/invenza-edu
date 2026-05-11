@@ -119,7 +119,7 @@ export default function DiscrepanciasList() {
   };
 
   const updateMutation = useMutation({
-    mutationFn: async ({ kitKeys, sourceItemId }) => {
+    mutationFn: async ({ kitKeys, sourceItemId, mode = 'tudo' }) => {
       const sourceItem = equipments.find(e => e.id === sourceItemId);
       if (!sourceItem) throw new Error("Item de origem não encontrado");
 
@@ -133,7 +133,10 @@ export default function DiscrepanciasList() {
       for (const kit of kitsToUpdate) {
         setStatusMessage(`A processar conjunto ${kit.imobilizado}...`);
         
-        // 1. Determinar o estado de destino
+        // Determinar o que sincronizar baseado no modo
+        const syncEstado = mode === 'tudo' || mode === 'estado';
+        const syncArmazem = mode === 'tudo' || mode === 'armazem';
+
         const targetEstado = sourceItem.estado;
         const targetArmazem = sourceItem.situacao_armazem;
 
@@ -144,98 +147,98 @@ export default function DiscrepanciasList() {
           setProgress(Math.round((currentStep / totalSteps) * 100));
           setStatusMessage(`A sincronizar ${item.tipo} (${item.numero_serie})...`);
 
-          // Se o estado for igual, apenas atualizar armazém se necessário
-          if (item.estado === targetEstado && item.situacao_armazem === targetArmazem) continue;
+          const needsEstadoUpdate = syncEstado && item.estado !== targetEstado;
+          const needsArmazemUpdate = syncArmazem && item.situacao_armazem !== targetArmazem;
 
-          // Atualizar o equipamento para o estado de destino (ou intermédio se necessário)
-          // Se o equipamento estiver 'Inutilizado' ou 'Extraviado', movemos para 'Recondicionamento'
-          // primeiro para permitir que os triggers de Empréstimo/Avaria funcionem.
-          if (['Inutilizado', 'Extraviado'].includes(item.estado)) {
-            await db.entities.Equipamento.update(item.id, { estado: 'Recondicionamento' });
-          }
+          if (!needsEstadoUpdate && !needsArmazemUpdate) continue;
 
-          // LOGICA DE SINCRONIZAÇÃO COMPLETA (EMPRESTIMOS, AVARIAS, ETC)
-          // Se o estado de destino for Aluno/Docente, precisamos de um empréstimo
-          if (['Aluno', 'Docente'].includes(targetEstado)) {
-            const { data: activeEmps } = await db.client
-              .from('emprestimos')
-              .select('*')
-              .eq('equipamento_id', sourceItemId)
-              .eq('estado', 'ATIVO')
-              .limit(1);
+          // LOGICA DE SINCRONIZAÇÃO DE ESTADO (EMPRESTIMOS, AVARIAS, ETC)
+          if (needsEstadoUpdate) {
+            // Se o equipamento estiver 'Inutilizado' ou 'Extraviado', movemos para 'Recondicionamento'
+            if (['Inutilizado', 'Extraviado'].includes(item.estado)) {
+              await db.entities.Equipamento.update(item.id, { estado: 'Recondicionamento' });
+            }
 
-            if (activeEmps && activeEmps.length > 0) {
-              const sourceEmp = activeEmps[0];
-              const { data: itemEmps } = await db.client
+            if (['Aluno', 'Docente'].includes(targetEstado)) {
+              const { data: activeEmps } = await db.client
                 .from('emprestimos')
                 .select('*')
-                .eq('equipamento_id', item.id)
-                .eq('estado', 'ATIVO');
+                .eq('equipamento_id', sourceItemId)
+                .eq('estado', 'ATIVO')
+                .limit(1);
 
-              if (!itemEmps || itemEmps.length === 0) {
-                setStatusMessage(`A criar empréstimo para ${item.numero_serie}...`);
-                // Forçar estado disponível antes de criar empréstimo para passar no trigger
-                await db.entities.Equipamento.update(item.id, { estado: 'Recondicionamento' });
-                
-                await db.entities.Emprestimo.create({
-                  equipamento_id: item.id,
-                  pessoa_id: sourceEmp.pessoa_id,
-                  equipamento_info: `${item.tipo} ${item.marca} ${item.modelo}`.trim(),
-                  pessoa_info: sourceEmp.pessoa_info,
-                  data_emprestimo: sourceEmp.data_emprestimo,
-                  estado: 'ATIVO',
-                  notas_entrega: `Sincronização automática via Auditoria (Imob: ${kit.imobilizado})`
-                });
+              if (activeEmps && activeEmps.length > 0) {
+                const sourceEmp = activeEmps[0];
+                const { data: itemEmps } = await db.client
+                  .from('emprestimos')
+                  .select('*')
+                  .eq('equipamento_id', item.id)
+                  .eq('estado', 'ATIVO');
+
+                if (!itemEmps || itemEmps.length === 0) {
+                  setStatusMessage(`A criar empréstimo para ${item.numero_serie}...`);
+                  await db.entities.Equipamento.update(item.id, { estado: 'Recondicionamento' });
+                  
+                  await db.entities.Emprestimo.create({
+                    equipamento_id: item.id,
+                    pessoa_id: sourceEmp.pessoa_id,
+                    equipamento_info: `${item.tipo} ${item.marca} ${item.modelo}`.trim(),
+                    pessoa_info: sourceEmp.pessoa_info,
+                    data_emprestimo: sourceEmp.data_emprestimo,
+                    estado: 'ATIVO',
+                    notas_entrega: `Sincronização automática via Auditoria (Imob: ${kit.imobilizado})`
+                  });
+                }
               }
             }
-          }
 
-          // Se o estado de destino for Manutenção, precisamos de uma avaria
-          if (targetEstado === 'Manutenção') {
-            const { data: activeAvarias } = await db.client
-              .from('avarias')
-              .select('*')
-              .eq('equipamento_id', sourceItemId)
-              .not('estado', 'in', '("ARRANJADO","INUTILIZADO")')
-              .limit(1);
-
-            if (activeAvarias && activeAvarias.length > 0) {
-              const sourceAv = activeAvarias[0];
-              const { data: itemAvarias } = await db.client
+            if (targetEstado === 'Manutenção') {
+              const { data: activeAvarias } = await db.client
                 .from('avarias')
                 .select('*')
-                .eq('equipamento_id', item.id)
-                .not('estado', 'in', '("ARRANJADO","INUTILIZADO")');
+                .eq('equipamento_id', sourceItemId)
+                .not('estado', 'in', '("ARRANJADO","INUTILIZADO")')
+                .limit(1);
 
-              if (!itemAvarias || itemAvarias.length === 0) {
-                setStatusMessage(`A abrir avaria para ${item.numero_serie}...`);
-                const { data: maxAvaria } = await db.client
+              if (activeAvarias && activeAvarias.length > 0) {
+                const sourceAv = activeAvarias[0];
+                const { data: itemAvarias } = await db.client
                   .from('avarias')
-                  .select('numero_avaria')
-                  .order('numero_avaria', { ascending: false })
-                  .limit(1)
-                  .maybeSingle();
+                  .select('*')
+                  .eq('equipamento_id', item.id)
+                  .not('estado', 'in', '("ARRANJADO","INUTILIZADO")');
 
-                const nextNumero = maxAvaria?.numero_avaria ? maxAvaria.numero_avaria + 1 : 1001;
+                if (!itemAvarias || itemAvarias.length === 0) {
+                  setStatusMessage(`A abrir avaria para ${item.numero_serie}...`);
+                  const { data: maxAvaria } = await db.client
+                    .from('avarias')
+                    .select('numero_avaria')
+                    .order('numero_avaria', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
 
-                await db.entities.Avaria.create({
-                  numero_avaria: nextNumero,
-                  equipamento_id: item.id,
-                  equipamento_info: `${item.tipo} ${item.marca} ${item.modelo}`.trim(),
-                  origem: sourceAv.origem || 'AUDITORIA',
-                  estado: sourceAv.estado || 'A REVER',
-                  diagnostico: `Sincronização automática via Auditoria (Imob: ${kit.imobilizado})`,
-                  componentes: sourceAv.componentes || {}
-                });
+                  const nextNumero = maxAvaria?.numero_avaria ? maxAvaria.numero_avaria + 1 : 1001;
+
+                  await db.entities.Avaria.create({
+                    numero_avaria: nextNumero,
+                    equipamento_id: item.id,
+                    equipamento_info: `${item.tipo} ${item.marca} ${item.modelo}`.trim(),
+                    origem: sourceAv.origem || 'AUDITORIA',
+                    estado: sourceAv.estado || 'A REVER',
+                    diagnostico: `Sincronização automática via Auditoria (Imob: ${kit.imobilizado})`,
+                    componentes: sourceAv.componentes || {}
+                  });
+                }
               }
             }
           }
 
-          // Atualização final do equipamento (estado e armazém)
-          await db.entities.Equipamento.update(item.id, {
-            estado: targetEstado,
-            situacao_armazem: targetArmazem
-          });
+          // Atualização final do equipamento
+          const updatePayload = {};
+          if (needsEstadoUpdate) updatePayload.estado = targetEstado;
+          if (needsArmazemUpdate) updatePayload.situacao_armazem = targetArmazem;
+
+          await db.entities.Equipamento.update(item.id, updatePayload);
         }
       }
       
@@ -256,11 +259,11 @@ export default function DiscrepanciasList() {
     }
   });
 
-  const handleFix = (kitKey, sourceItemId) => {
-    updateMutation.mutate({ kitKeys: new Set([kitKey]), sourceItemId });
+  const handleFix = (kitKey, sourceItemId, mode = 'tudo') => {
+    updateMutation.mutate({ kitKeys: new Set([kitKey]), sourceItemId, mode });
   };
 
-  const handleFixSelected = (useMainItem = true) => {
+  const handleFixSelected = (useMainItem = true, mode = 'tudo') => {
     if (selectedKits.size === 0) {
       toast.error("Selecione pelo menos um conjunto");
       return;
@@ -271,7 +274,7 @@ export default function DiscrepanciasList() {
         for (const kitKey of selectedKits) {
           const disc = discrepancies.find(d => d.kitKey === kitKey);
           const sourceItem = useMainItem ? disc.mainItem : disc.slaveItem;
-          await updateMutation.mutateAsync({ kitKeys: new Set([kitKey]), sourceItemId: sourceItem.id });
+          await updateMutation.mutateAsync({ kitKeys: new Set([kitKey]), sourceItemId: sourceItem.id, mode });
         }
       })(),
       {
@@ -339,25 +342,41 @@ export default function DiscrepanciasList() {
           </Select>
         </div>
 
-        <div className="flex gap-2">
-          <Button 
-            variant="outline" 
-            size="sm"
-            className="flex-1 h-9 text-xs font-bold bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
-            onClick={() => handleFixSelected(true)}
-            disabled={selectedKits.size === 0 || updateMutation.isPending}
-          >
-            Seguir Mestres (PC)
-          </Button>
-          <Button 
-            variant="outline" 
-            size="sm"
-            className="flex-1 h-9 text-xs font-bold bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"
-            onClick={() => handleFixSelected(false)}
-            disabled={selectedKits.size === 0 || updateMutation.isPending}
-          >
-            Seguir Slaves
-          </Button>
+        <div className="lg:col-span-1 grid grid-cols-2 gap-2">
+          <Select defaultValue="tudo" onValueChange={(val) => {
+            // Este select controla o modo para os botões de ação em massa
+            window._bulkMode = val;
+          }}>
+            <SelectTrigger className="h-9 text-xs font-bold">
+              <SelectValue placeholder="Modo: Tudo" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="tudo">Modo: Tudo</SelectItem>
+              <SelectItem value="estado">Modo: Estado</SelectItem>
+              <SelectItem value="armazem">Modo: Armazém</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <div className="flex flex-col gap-1">
+            <Button 
+              variant="outline" 
+              size="sm"
+              className="h-7 text-[9px] font-bold bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
+              onClick={() => handleFixSelected(true, window._bulkMode || 'tudo')}
+              disabled={selectedKits.size === 0 || updateMutation.isPending}
+            >
+              Seguir Mestres
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm"
+              className="h-7 text-[9px] font-bold bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"
+              onClick={() => handleFixSelected(false, window._bulkMode || 'tudo')}
+              disabled={selectedKits.size === 0 || updateMutation.isPending}
+            >
+              Seguir Slaves
+            </Button>
+          </div>
         </div>
 
         {/* Novos Filtros de Estado */}
@@ -510,22 +529,65 @@ export default function DiscrepanciasList() {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex flex-col gap-1 items-end">
-                      <Button 
-                        variant="secondary" 
-                        size="sm" 
-                        className="text-[10px] h-7 w-32 font-bold bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
-                        onClick={() => handleFix(disc.kitKey, disc.mainItem.id)}
-                      >
-                        Seguir Mestre (PC)
-                      </Button>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="text-[10px] h-7 w-32 font-bold bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"
-                        onClick={() => handleFix(disc.kitKey, disc.slaveItem.id)}
-                      >
-                        Seguir Slave
-                      </Button>
+                      <div className="flex gap-1">
+                        <Button 
+                          variant="secondary" 
+                          size="sm" 
+                          className="text-[9px] h-6 px-1 font-bold bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
+                          title="Sincronizar apenas o Estado"
+                          onClick={() => handleFix(disc.kitKey, disc.mainItem.id, 'estado')}
+                        >
+                          Mestre (Est)
+                        </Button>
+                        <Button 
+                          variant="secondary" 
+                          size="sm" 
+                          className="text-[9px] h-6 px-1 font-bold bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
+                          title="Sincronizar apenas o Armazém"
+                          onClick={() => handleFix(disc.kitKey, disc.mainItem.id, 'armazem')}
+                        >
+                          Mestre (Arm)
+                        </Button>
+                        <Button 
+                          variant="secondary" 
+                          size="sm" 
+                          className="text-[9px] h-6 px-1 font-bold bg-blue-600 text-white hover:bg-blue-700"
+                          title="Sincronizar Estado e Armazém"
+                          onClick={() => handleFix(disc.kitKey, disc.mainItem.id, 'tudo')}
+                        >
+                          Mestre (Tudo)
+                        </Button>
+                      </div>
+
+                      <div className="flex gap-1">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="text-[9px] h-6 px-1 font-bold bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"
+                          title="Sincronizar apenas o Estado"
+                          onClick={() => handleFix(disc.kitKey, disc.slaveItem.id, 'estado')}
+                        >
+                          Slave (Est)
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="text-[9px] h-6 px-1 font-bold bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"
+                          title="Sincronizar apenas o Armazém"
+                          onClick={() => handleFix(disc.kitKey, disc.slaveItem.id, 'armazem')}
+                        >
+                          Slave (Arm)
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="text-[9px] h-6 px-1 font-bold bg-amber-600 text-white hover:bg-amber-700"
+                          title="Sincronizar Estado e Armazém"
+                          onClick={() => handleFix(disc.kitKey, disc.slaveItem.id, 'tudo')}
+                        >
+                          Slave (Tudo)
+                        </Button>
+                      </div>
                     </div>
                   </TableCell>
                 </TableRow>
