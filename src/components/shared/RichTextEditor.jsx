@@ -125,6 +125,8 @@ export default function RichTextEditor({
             language: 'pt-PT',
             branding: false,
             promotion: false,
+            elementpath: false,
+            statusbar: false,
             placeholder,
             tinycomments_mode: 'embedded',
             tinycomments_author: 'Admin',
