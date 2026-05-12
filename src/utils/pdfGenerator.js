@@ -103,11 +103,14 @@ viii. \t Está vedada a realização de comunicações em roaming fora da UE.
  * @param {string} title Filename title
  * @param {object} template Template object from DB
  * @param {object} vars Variables to replace
- * @param {string} format 'pdf' or 'docx' (defaults to both if template has file_base64)
+ * @param {string} format 'pdf' or 'docx' (defaults to docx now)
  */
-export async function exportDocument(title, template, vars = {}, format = null) {
+export async function exportDocument(title, template, vars = {}, format = 'docx') {
   if (!vars) vars = {};
   
+  // Force format to docx for now as PDF engine is not reliable
+  const targetFormat = format === 'pdf' ? 'docx' : format;
+
   return toast.promise(
     (async () => {
       // Map barcodes if they are base64 images
@@ -128,48 +131,24 @@ export async function exportDocument(title, template, vars = {}, format = null) 
       if (vars.barcode_serie) docxData.barcode_serie = vars.barcode_serie;
       if (vars.barcode_imobilizado) docxData.barcode_imobilizado = vars.barcode_imobilizado;
 
-      if (template?.file_base64 && (format === 'docx' || !format)) {
+      if (template?.file_base64) {
         try {
           // 1. Generate filled DOCX
           const docxBlob = await DocxProcessor.generateDocx(template.file_base64, docxData);
           
           // 2. Offer DOCX download
           saveAs(docxBlob, `${title.replace(/\s+/g, '_')}.docx`);
-          
-          // If a specific format was requested and it was docx, we're done
-          if (format === 'docx') return;
+          return;
         } catch (err) {
           console.error('DOCX Export failed:', err);
           throw new Error('Falha ao gerar DOCX: ' + (err.message || 'Erro desconhecido'));
         }
-      }
-
-      // PDF Generation (either requested specifically, or as fallback, or as part of both)
-      if (format === 'pdf' || !format) {
-        try {
-          let html = template?.conteudo;
-          
-          // If HTML content is missing but we have the DOCX base64, try to generate it on the fly
-          if (!html && template?.file_base64) {
-            console.log('Template HTML missing, generating from DOCX base64...');
-            html = await DocxProcessor.getHtmlFromBase64(template.file_base64);
-          }
-
-          if (html) {
-            const filledHtml = fillHtmlVariables(html, vars);
-            // Wait for the promise to ensure the process finishes
-            await DocxProcessor.htmlToPdf(filledHtml, `${title.replace(/\s+/g, '_')}.pdf`);
-          } else {
-            throw new Error('Template sem conteúdo HTML disponível para gerar PDF.');
-          }
-        } catch (err) {
-          console.error('PDF Export failed:', err);
-          throw new Error('Falha ao gerar PDF: ' + (err.message || 'Erro desconhecido'));
-        }
+      } else {
+        throw new Error('Template sem ficheiro DOCX base disponível.');
       }
     })(),
     {
-      loading: `A gerar documento (${format?.toUpperCase() || 'PDF/DOCX'})...`,
+      loading: `A gerar documento (Word)...`,
       success: 'Documento gerado com sucesso!',
       error: (err) => err.message || 'Erro ao gerar documento'
     }
