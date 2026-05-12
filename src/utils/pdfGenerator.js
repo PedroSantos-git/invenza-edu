@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 import { DocxProcessor } from './docxProcessor';
 import { saveAs } from 'file-saver';
 import { db } from '@/api/db';
+import { toast } from 'react-hot-toast';
 
 const ACESSORIOS_LABELS = {
   carregador: 'Carregador portátil',
