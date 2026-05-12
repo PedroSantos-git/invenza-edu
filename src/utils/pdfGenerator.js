@@ -37,13 +37,13 @@ function formatDataHora() {
   return `${dia}/${mes}/${ano}, às ${horas} horas e ${minutos} minutos`;
 }
 
-function generateEquipmentSections(kitItems) {
+function generateEquipmentSections(kitItems = []) {
   const sections = [];
   let sectionLetter = 'A';
   
-  const pcs = kitItems.filter(item => item.tipo?.toUpperCase().startsWith('PC'));
-  const hotspots = kitItems.filter(item => item.tipo?.toUpperCase().includes('HOTSPOT'));
-  const others = kitItems.filter(item => !pcs.includes(item) && !hotspots.includes(item));
+  const items = kitItems || [];
+  const pcs = items.filter(item => item && item.tipo?.toUpperCase().startsWith('PC'));
+  const hotspots = items.filter(item => item && item.tipo?.toUpperCase().includes('HOTSPOT'));
   
   if (pcs.length > 0) {
     const pc = pcs[0];
