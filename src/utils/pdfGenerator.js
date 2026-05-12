@@ -194,13 +194,13 @@ export async function gerarPDFEmprestimoDiretoAluno(emprestimo, currentUser = nu
     y += (lines.length * (size / 2.5)) + 3;
   }
   
-  // TODO: Add República Portuguesa logo at top left
-  // doc.addImage('/assets/logo-republica-portuguesa.png', 'PNG', marginLeft, y, 40, 20);
-  // y += 30;
+  // Add República Portuguesa logo at top left
+  doc.addImage('/assets/logo-republica-portuguesa.png', 'PNG', marginLeft, y, 40, 20);
+  y += 30;
   
-  // TODO: Add Auto de Entrega header image
-  // doc.addImage('/assets/auto-de-entrega-header.png', 'PNG', marginLeft, y, contentWidth, 80);
-  // y += 90;
+  // Add Auto de Entrega header image
+  doc.addImage('/assets/auto-de-entrega-header.png', 'PNG', marginLeft, y, contentWidth, 100);
+  y += 110;
   
   // Title
   addText(`Auto de entrega nº ${emprestimo.id}`, 16, true);
@@ -338,8 +338,8 @@ export async function gerarPDFEmprestimoDiretoAluno(emprestimo, currentUser = nu
   doc.text('Apoios:', pageWidth / 2, y, { align: 'center' });
   y += 15;
   
-  // TODO: Add apoios logos
-  // doc.addImage('/assets/apoios-logos.png', 'PNG', marginLeft, y, contentWidth, 60);
+  // Add apoios logos
+  doc.addImage('/assets/apoios-logos.png', 'PNG', marginLeft, y, contentWidth, 70);
   
   // Add footer
   const totalPages = doc.internal.getNumberOfPages();
