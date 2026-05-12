@@ -29,7 +29,7 @@ begin
     create type componente_estado as enum ('OK', 'AVARIADO', 'DESCONHECIDO');
   end if;
   if not exists (select 1 from pg_type where typname = 'documento_template_tipo') then
-    create type documento_template_tipo as enum ('EMPRESTIMO', 'DEVOLUCAO', 'AVARIA', 'EQUIPAMENTO');
+    create type documento_template_tipo as enum ('EMPRESTIMO', 'DEVOLUCAO', 'AVARIA', 'EQUIPAMENTO', 'EMPRESTIMO_ALUNO', 'EMPRESTIMO_DOCENTE', 'DEVOLUCAO_ALUNO', 'DEVOLUCAO_DOCENTE');
   end if;
   if not exists (select 1 from pg_type where typname = 'pedido_tipo') then
     create type pedido_tipo as enum ('EMPRÉSTIMO', 'DEVOLUÇÃO', 'SUPORTE');
