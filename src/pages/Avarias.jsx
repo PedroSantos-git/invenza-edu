@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Search, FileDown, Ban, Copy, ExternalLink, Plus, ArrowUpDown, ArrowUp, ArrowDown, Upload, Loader2, Download, CheckCircle2 } from 'lucide-react';
+import { Search, Ban, Copy, ExternalLink, Plus, ArrowUpDown, ArrowUp, ArrowDown, Upload, Loader2, Download, CheckCircle2 } from 'lucide-react';
 import StatusBadge from '@/components/shared/StatusBadge';
 import SmartScanner from '@/components/shared/SmartScanner';
 import AvariaForm from '@/components/avarias/AvariaForm';
@@ -17,7 +17,7 @@ import AvariaDetail from '@/components/avarias/AvariaDetail';
 import EquipamentoDetail from '@/components/equipamentos/EquipamentoDetail';
 import { groupEquipmentsIntoKits, isMainEquipment } from '@/utils/kitUtils';
 import { format, isValid, parse } from 'date-fns';
-import { gerarPDFAvaria, gerarRelatorioImportacaoAvariasPDF } from '@/utils/pdfGenerator';
+import { gerarRelatorioImportacaoAvariasPDF } from '@/utils/pdfGenerator';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import { useQueryClient } from '@tanstack/react-query';
@@ -600,7 +600,6 @@ export default function Avarias() {
                     {av.created_at ? format(new Date(av.created_at), 'dd/MM/yyyy') : '—'}
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="icon" onClick={e => { e.stopPropagation(); gerarPDFAvaria(av, pdfTemplates, user); }}><FileDown className="w-4 h-4" /></Button>
                   </TableCell>
                 </TableRow>
               ))

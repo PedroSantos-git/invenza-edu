@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Search, Plus, Pencil, FileSpreadsheet, FileDown, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Search, Plus, Pencil, FileSpreadsheet, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import StatusBadge from '@/components/shared/StatusBadge';
 import FileUpload from '@/components/shared/FileUpload';
 import ImportDialog from '@/components/shared/ImportDialog';
@@ -18,7 +18,6 @@ import SmartScanner from '@/components/shared/SmartScanner';
 import EquipamentoScanner from '@/components/equipamentos/EquipamentoScanner';
 import EquipamentoDetail from '@/components/equipamentos/EquipamentoDetail';
 import { toast } from 'sonner';
-import { gerarPDFEquipamento } from '@/utils/pdfGenerator';
 import { useAuth } from '@/lib/AuthContext';
 import { format } from 'date-fns';
 import { groupEquipmentsIntoKits, isMainEquipment } from '@/utils/kitUtils';
@@ -119,11 +118,6 @@ export default function Equipamentos() {
     });
 
   const groupedEquipamentos = React.useMemo(() => groupEquipmentsIntoKits(filtered), [filtered]);
-
-  const handlePDF = (eq, e) => {
-    e.stopPropagation();
-    gerarPDFEquipamento(eq, pdfTemplates, user);
-  };
 
   return (
     <div className="space-y-6">
@@ -246,7 +240,6 @@ export default function Equipamentos() {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right flex gap-1 justify-end">
-                    <Button variant="ghost" size="icon" title="Gerar PDF" onClick={e => handlePDF(eq, e)}><FileDown className="w-4 h-4" /></Button>
                     <Button variant="ghost" size="icon" onClick={e => { e.stopPropagation(); openForm(eq); }}><Pencil className="w-4 h-4" /></Button>
                   </TableCell>
                 </TableRow>

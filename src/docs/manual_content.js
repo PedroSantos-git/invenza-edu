@@ -227,6 +227,12 @@ export const MANUAL_CONTENT = {
     content: `
       Área reservada para personalização da plataforma.
       
+      ### Gestão de Templates:
+      O sistema utiliza templates em formato Word (DOCX) para a geração automática de documentos legais.
+      - **Tipos Suportados**: Atualmente o sistema foca-se em **Empréstimos** e **Devoluções** (tanto para Alunos como para Docentes).
+      - **Variáveis**: Cada tipo de template tem um conjunto de "tags" (ex: \`[[nome_aluno]]\`, \`[[data_emprestimo]]\`) que são substituídas automaticamente pelos dados reais.
+      - **Upload**: Pode carregar o seu próprio ficheiro .docx, garantindo que as tags estão escritas exatamente como indicado na lista de "Tags Disponíveis".
+      
       ### Backups (Novo):
       Esta nova secção permite exportar e importar dados da base de dados em formato Excel:
       
