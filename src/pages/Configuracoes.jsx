@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Pencil, Plus, Trash2, Settings, FileUp, FileDown, Eye, Loader2, Info, Mail, Clock, ShieldCheck, MailPlus, Upload, Image, Database, CheckSquare, Square, RefreshCcw } from 'lucide-react';
+import { Pencil, Plus, Trash2, Settings, FileUp, FileDown, Eye, Loader2, Info, Mail, Clock, ShieldCheck, MailPlus, Upload, Image, Database, CheckSquare, Square, RefreshCcw, HardDriveDownload, HardDriveUpload } from 'lucide-react';
 import { toast } from 'sonner';
 import { DocxProcessor } from '@/utils/docxProcessor';
 import mammoth from 'mammoth';
@@ -19,6 +19,7 @@ import { saveAs } from 'file-saver';
 import RichTextEditor from '@/components/shared/RichTextEditor';
 import { EmailService } from '@/api/emailService';
 import { useAuth } from '@/lib/AuthContext';
+import * as XLSX from 'xlsx';
 
 const TEMPLATE_VARS = {
   EMPRESTIMO_ALUNO: ['{{equipamento}}', '{{pessoa}}', '{{numero_aluno}}', '{{data_emprestimo}}', '{{acessorios}}', '{{notas_entrega}}', '{{data_hoje}}', '{{uuid}}', '{%barcode_serie}', '{%barcode_imobilizado}'],
@@ -42,6 +43,21 @@ const EMAIL_TEMPLATE_VARS = {
   SOLICITAR_DEVOLUCAO: ['{{pessoa}}', '{{equipamento}}', '{{motivo}}', '{{horario}}'],
   GERAL: ['{{pessoa}}', '{{corpo}}', '{{horario}}'],
 };
+
+const TABLES_CONFIG = [
+  { key: 'tipos_equipamento', name: 'Tipos de Equipamento', entity: db.entities.TipoEquipamento },
+  { key: 'pessoas', name: 'Pessoas', entity: db.entities.Pessoa },
+  { key: 'utilizadores', name: 'Utilizadores', entity: db.entities.User },
+  { key: 'equipamentos', name: 'Equipamentos', entity: db.entities.Equipamento },
+  { key: 'pedidos', name: 'Pedidos', entity: db.entities.Pedido },
+  { key: 'emprestimos', name: 'Empréstimos', entity: db.entities.Emprestimo },
+  { key: 'devolucoes', name: 'Devoluções', entity: db.entities.Devolucao },
+  { key: 'avarias', name: 'Avarias', entity: db.entities.Avaria },
+  { key: 'configuracoes', name: 'Configurações', entity: db.entities.Configuracao },
+  { key: 'documento_templates', name: 'Templates de Documentos', entity: db.entities.DocumentoTemplate },
+  { key: 'email_templates', name: 'Templates de Email', entity: db.entities.EmailTemplate },
+  { key: 'historico_emails', name: 'Histórico de Emails', entity: db.entities.EmailHistorico },
+];
 
 function DocxPreview({ base64 }) {
   const [html, setHtml] = React.useState('');
@@ -100,6 +116,132 @@ export default function Configuracoes() {
   const [emailFormOpen, setEmailFormOpen] = useState(false);
   const [emailSelected, setEmailSelected] = useState(null);
   const [emailForm, setEmailForm] = useState({ tipo: 'GERAL', assunto: '', corpo: '' });
+
+  const [selectedExportTables, setSelectedExportTables] = useState([]);
+  const [selectedImportFiles, setSelectedImportFiles] = useState([]);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+
+  const handleExportTable = async (tableKey) => {
+    const config = TABLES_CONFIG.find(t => t.key === tableKey);
+    if (!config) return;
+    setIsExporting(true);
+    const toastId = toast.loading(`A exportar ${config.name}...`);
+    try {
+      const data = await config.entity.list();
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, tableKey);
+      const fileName = `${tableKey}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+      toast.success(`${config.name} exportado com sucesso!`, { id: toastId });
+    } catch (err) {
+      toast.error(`Erro ao exportar: ${err.message}`, { id: toastId });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleExportAll = async () => {
+    const tablesToExport = selectedExportTables.length > 0 
+      ? TABLES_CONFIG.filter(t => selectedExportTables.includes(t.key)) 
+      : TABLES_CONFIG;
+    if (tablesToExport.length === 0) {
+      toast.warning('Selecione pelo menos uma tabela para exportar.');
+      return;
+    }
+    setIsExporting(true);
+    const toastId = toast.loading(`A exportar ${tablesToExport.length} tabela(s)...`);
+    try {
+      const wb = XLSX.utils.book_new();
+      for (const config of tablesToExport) {
+        const data = await config.entity.list();
+        const ws = XLSX.utils.json_to_sheet(data);
+        XLSX.utils.book_append_sheet(wb, ws, config.key);
+      }
+      const fileName = `backup_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+      toast.success(`${tablesToExport.length} tabela(s) exportada(s) com sucesso!`, { id: toastId });
+    } catch (err) {
+      toast.error(`Erro ao exportar: ${err.message}`, { id: toastId });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleFileSelect = (e) => {
+    const files = Array.from(e.target.files || []);
+    setSelectedImportFiles(prev => [...prev, ...files].filter((f, i, arr) => arr.findIndex(x => x.name === f.name) === i));
+  };
+
+  const removeImportFile = (fileName) => {
+    setSelectedImportFiles(prev => prev.filter(f => f.name !== fileName));
+  };
+
+  const parseExcelFile = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const wb = XLSX.read(data, { type: 'array' });
+          const sheets = {};
+          for (const sheetName of wb.SheetNames) {
+            const ws = wb.Sheets[sheetName];
+            const jsonData = XLSX.utils.sheet_to_json(ws, { defval: null });
+            sheets[sheetName] = jsonData;
+          }
+          resolve(sheets);
+        } catch (err) {
+          reject(err);
+        }
+      };
+      reader.onerror = reject;
+      reader.readAsArrayBuffer(file);
+    });
+  };
+
+  const deleteAllFromTable = async (tableKey) => {
+    const config = TABLES_CONFIG.find(t => t.key === tableKey);
+    if (!config) return;
+    const data = await config.entity.list();
+    for (const item of data) {
+      await config.entity.delete(item.id);
+    }
+  };
+
+  const handleImport = async () => {
+    if (selectedImportFiles.length === 0) {
+      toast.warning('Selecione pelo menos um ficheiro para importar.');
+      return;
+    }
+    if (!confirm(`Tem a certeza que deseja importar ${selectedImportFiles.length} ficheiro(s)? Esta ação irá substituir os dados das tabelas correspondentes.`)) return;
+    setIsImporting(true);
+    const toastId = toast.loading('A importar ficheiros...');
+    try {
+      const allSheets = {};
+      for (const file of selectedImportFiles) {
+        const sheets = await parseExcelFile(file);
+        Object.assign(allSheets, sheets);
+      }
+      const tablesToProcess = TABLES_CONFIG.filter(t => allSheets[t.key]);
+      for (const config of tablesToProcess) {
+        toast.loading(`A processar ${config.name}...`, { id: toastId });
+        await deleteAllFromTable(config.key);
+        const data = allSheets[config.key];
+        if (data.length > 0) {
+          await config.entity.bulkCreate(data);
+        }
+      }
+      qc.invalidateQueries();
+      toast.success(`${tablesToProcess.length} tabela(s) importada(s) com sucesso!`, { id: toastId });
+      setSelectedImportFiles([]);
+    } catch (err) {
+      toast.error(`Erro ao importar: ${err.message}`, { id: toastId });
+    } finally {
+      setIsImporting(false);
+    }
+  };
 
   const { data: configEmail = { dados: {} } } = useQuery({
     queryKey: ['config-email'],
@@ -579,13 +721,14 @@ export default function Configuracoes() {
       </div>
 
       <Tabs defaultValue="tipos" className="w-full">
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-7">
           <TabsTrigger value="tipos">Tipos Equipamento</TabsTrigger>
           <TabsTrigger value="templates">Templates PDF</TabsTrigger>
           <TabsTrigger value="email">Config. Email</TabsTrigger>
           <TabsTrigger value="email-templates">Templates Email</TabsTrigger>
           <TabsTrigger value="horario">Horário</TabsTrigger>
           <TabsTrigger value="cleanup">Limpeza</TabsTrigger>
+          <TabsTrigger value="backups">Backups</TabsTrigger>
         </TabsList>
 
         <TabsContent value="tipos" className="mt-4 space-y-4">
@@ -903,6 +1046,141 @@ export default function Configuracoes() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="backups" className="mt-4 space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm font-bold flex items-center gap-2">
+                  <HardDriveDownload className="w-4 h-4" /> Exportar Dados
+                </CardTitle>
+                <CardDescription>
+                  Exporta tabelas para ficheiros Excel.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <Label>Tabelas para exportar</Label>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => {
+                        if (selectedExportTables.length === TABLES_CONFIG.length) {
+                          setSelectedExportTables([]);
+                        } else {
+                          setSelectedExportTables(TABLES_CONFIG.map(t => t.key));
+                        }
+                      }}
+                    >
+                      {selectedExportTables.length === TABLES_CONFIG.length ? 'Desselecionar Todos' : 'Selecionar Todos'}
+                    </Button>
+                  </div>
+                  <div className="max-h-[300px] overflow-y-auto border rounded-lg p-3 space-y-2">
+                    {TABLES_CONFIG.map(table => (
+                      <div key={table.key} className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedExportTables.includes(table.key)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedExportTables(prev => [...prev, table.key]);
+                            } else {
+                              setSelectedExportTables(prev => prev.filter(k => k !== table.key));
+                            }
+                          }}
+                          className="rounded border-gray-300"
+                        />
+                        <Label className="flex-1 cursor-pointer">{table.name}</Label>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          onClick={() => handleExportTable(table.key)}
+                          disabled={isExporting}
+                        >
+                          <FileDown className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <Button 
+                  onClick={handleExportAll} 
+                  disabled={isExporting}
+                  className="w-full"
+                >
+                  {isExporting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <HardDriveDownload className="w-4 h-4 mr-2" />}
+                  Exportar Selecionadas / Todas
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm font-bold flex items-center gap-2">
+                  <HardDriveUpload className="w-4 h-4" /> Importar Dados
+                </CardTitle>
+                <CardDescription>
+                  Importa ficheiros Excel para a base de dados.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Ficheiros para importar</Label>
+                  <div className="border-2 border-dashed rounded-lg p-6 text-center">
+                    <input
+                      type="file"
+                      id="import-files"
+                      className="hidden"
+                      accept=".xlsx,.xls"
+                      multiple
+                      onChange={handleFileSelect}
+                    />
+                    <Button asChild variant="outline">
+                      <label htmlFor="import-files" className="cursor-pointer">
+                        <Upload className="w-4 h-4 mr-2" />
+                        Selecionar Ficheiros
+                      </label>
+                    </Button>
+                  </div>
+                </div>
+                {selectedImportFiles.length > 0 && (
+                  <div className="max-h-[200px] overflow-y-auto border rounded-lg">
+                    <Table>
+                      <TableBody>
+                        {selectedImportFiles.map(file => (
+                          <TableRow key={file.name}>
+                            <TableCell className="font-medium">{file.name}</TableCell>
+                            <TableCell className="text-xs text-muted-foreground">
+                              {(file.size / 1024).toFixed(1)} KB
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                onClick={() => removeImportFile(file.name)}
+                              >
+                                <Trash2 className="w-4 h-4 text-red-500" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+                <Button 
+                  onClick={handleImport} 
+                  disabled={selectedImportFiles.length === 0 || isImporting}
+                  className="w-full bg-green-600 hover:bg-green-700"
+                >
+                  {isImporting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <HardDriveUpload className="w-4 h-4 mr-2" />}
+                  Importar {selectedImportFiles.length > 0 ? `(${selectedImportFiles.length})` : ''}
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
       </Tabs>
 

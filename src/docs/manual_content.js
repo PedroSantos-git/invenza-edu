@@ -226,6 +226,24 @@ export const MANUAL_CONTENT = {
     title: 'Configurações do Sistema',
     content: `
       Área reservada para personalização da plataforma.
+      
+      ### Backups (Novo):
+      Esta nova secção permite exportar e importar dados da base de dados em formato Excel:
+      
+      **Exportar Dados**:
+      - Selecione uma ou várias tabelas para exportar.
+      - Clique em "Exportar Selecionadas / Todas" para gerar um ficheiro Excel com todas as tabelas selecionadas (ou todas, se nenhuma for selecionada).
+      - Cada tabela será uma folha (sheet) separada no ficheiro Excel.
+      - Pode também exportar uma única tabela clicando no ícone de download ao lado do nome da tabela.
+      
+      **Importar Dados**:
+      - Selecione um ou vários ficheiros Excel para importar.
+      - O sistema identificará as tabelas presentes nos ficheiros com base no nome das folhas (sheets).
+      - Ao importar, o sistema apaga todos os dados das tabelas correspondentes e importa os novos dados.
+      - A importação é feita pela ordem correta para manter a integridade referencial (ex: Tipos de Equipamento antes de Equipamentos, Equipamentos antes de Empréstimos).
+      - Clique em "Importar" para iniciar o processo (será pedido uma confirmação).
+      
+      Outras secções disponíveis:
       - **Horários**: Definição do horário de atendimento que aparece nos emails.
       - **Templates**: Gestão de textos e modelos de documentos.
       - **Segurança**: Opções avançadas de sistema.
