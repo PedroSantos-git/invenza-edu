@@ -174,14 +174,19 @@ export async function gerarPDFEmprestimoDiretoAluno(emprestimo, currentUser = nu
   const contentWidth = pageWidth - marginLeft - marginRight;
   
   // Helper function to add text with wrap
-  function addText(text, size = 12, isBold = false, indent = 0) {
-    if (y > pageHeight - 30) {
+  function addText(text, size = 12, isBold = false, indent = 0, isUnderlined = false) {
+    if (y > pageHeight - 60) {
       doc.addPage();
       y = 20;
     }
     
     doc.setFontSize(size);
     doc.setFont('helvetica', isBold ? 'bold' : 'normal');
+    if (isUnderlined) {
+      doc.setFont('helvetica', isBold ? 'bold' : 'normal', 'underline');
+    } else {
+      doc.setFont('helvetica', isBold ? 'bold' : 'normal', 'normal');
+    }
     
     const lines = doc.splitTextToSize(text, contentWidth - indent);
     doc.text(lines, marginLeft + indent, y);
@@ -273,22 +278,34 @@ export async function gerarPDFEmprestimoDiretoAluno(emprestimo, currentUser = nu
   dpText.forEach(text => {
     let indent = 0;
     let cleanLine = text;
+    const isSimAceito = cleanLine.trim().startsWith('SIM, ACEITO');
     while (cleanLine.startsWith('\t')) {
       indent += 10;
       cleanLine = cleanLine.substring(1);
     }
-    addText(cleanLine, 11, false, indent);
+    addText(cleanLine, 11, false, indent, isSimAceito);
   });
   y += 20;
   
   // Signature section
   addText('Entregue por:', 12, false);
+  // Add signature line
+  doc.setDrawColor(0);
+  doc.line(marginLeft, y + 5, marginLeft + 180, y + 5);
   y += 20;
+  
   addText('Cargo/categoria:', 12, false);
+  doc.setDrawColor(0);
+  doc.line(marginLeft, y + 5, marginLeft + 180, y + 5);
   y += 30;
+  
   addText('Assinatura do responsável pela entrega dos equipamentos:', 12, false);
-  y += 30;
-  addText('Encarregado de Educação do Aluno:', 12, false);
+  doc.setDrawColor(0);
+  doc.line(marginLeft, y + 5, marginLeft + 180, y + 5);
+  
+  addText('Encarregado de Educação do Aluno:', 12, false, pageWidth / 2);
+  doc.setDrawColor(0);
+  doc.line(marginLeft + pageWidth / 2, y + 5, marginLeft + pageWidth / 2 + 180, y + 5);
   y += 40;
   
   // Signatures
@@ -298,8 +315,18 @@ export async function gerarPDFEmprestimoDiretoAluno(emprestimo, currentUser = nu
   const eeText = pessoa?.ee_nome || '—';
   const userWidth = doc.getTextWidth(userText);
   const eeWidth = doc.getTextWidth(eeText);
-  doc.text(userText, pageWidth / 4 - userWidth / 2, y);
-  doc.text(eeText, (pageWidth * 3) / 4 - eeWidth / 2, y);
+  doc.text(userText, marginLeft + 90 - userWidth / 2, y);
+  doc.text(eeText, marginLeft + pageWidth / 2 + 90 - eeWidth / 2, y);
+  y += 30;
+  
+  // Add footer logos (placeholder for now - you can add actual images later)
+  if (y > pageHeight - 80) {
+    doc.addPage();
+    y = 20;
+  }
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Apoios:', pageWidth / 2, y, { align: 'center' });
   
   // Add footer
   const totalPages = doc.internal.getNumberOfPages();
