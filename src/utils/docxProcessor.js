@@ -196,55 +196,57 @@ export const DocxProcessor = {
   },
 
   /**
-   * Converts HTML to PDF using a hidden container (professional quality)
+   * Converts HTML to PDF using native jsPDF html engine (fast and searchable)
    */
   async htmlToPdf(htmlContent, filename) {
-    console.log('Starting PDF generation for:', filename);
+    console.log('Starting native PDF generation for:', filename);
+    
+    // Create a temporary visible but off-screen container
     const container = document.createElement('div');
-    container.className = 'pdf-export-container';
-    container.style.width = '210mm';
-    container.style.minHeight = '297mm';
-    container.style.padding = '20mm';
-    container.style.position = 'fixed';
-    container.style.left = '0';
+    container.style.width = '190mm'; // Standard A4 width minus margins
+    container.style.padding = '0';
+    container.style.position = 'absolute';
+    container.style.left = '-10000px';
     container.style.top = '0';
-    container.style.zIndex = '-9999';
     container.style.backgroundColor = 'white';
     container.style.color = 'black';
-    container.style.opacity = '0.01'; // Use low opacity instead of hidden
-    container.style.pointerEvents = 'none';
+    container.style.fontSize = '11pt';
+    container.style.lineHeight = '1.4';
     container.innerHTML = htmlContent;
     document.body.appendChild(container);
 
     try {
-      // Wait a bit for any internal images or styles to settle
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      console.log('Capturing canvas...');
-      const canvas = await html2canvas(container, { 
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        logging: true,
-        backgroundColor: '#ffffff',
-        windowWidth: container.scrollWidth,
-        windowHeight: container.scrollHeight
+      // Ensure images are loaded
+      const images = container.getElementsByTagName('img');
+      await Promise.all(Array.from(images).map(img => {
+        if (img.complete) return Promise.resolve();
+        return new Promise(resolve => {
+          img.onload = resolve;
+          img.onerror = resolve;
+        });
+      }));
+
+      const pdf = new jsPDF({
+        orientation: 'p',
+        unit: 'mm',
+        format: 'a4',
+        hotfixes: ['px_scaling']
+      });
+
+      await pdf.html(container, {
+        callback: function (doc) {
+          doc.save(filename || 'documento.pdf');
+        },
+        x: 10,
+        y: 10,
+        width: 190,
+        windowWidth: 800, // Optimize rendering width
+        autoPaging: 'text'
       });
       
-      console.log('Canvas captured, creating PDF...');
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      
-      const imgProps = pdf.getImageProperties(imgData);
-      const imgWidth = pdfWidth;
-      const imgHeight = (imgProps.height * imgWidth) / imgProps.width;
-      
-      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
-      pdf.save(filename || 'documento.pdf');
       console.log('PDF saved successfully');
     } catch (err) {
-      console.error('Error in htmlToPdf:', err);
+      console.error('Error in native htmlToPdf:', err);
       throw err;
     } finally {
       if (document.body.contains(container)) {
