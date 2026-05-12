@@ -85,6 +85,25 @@ export async function gerarPDFEmprestimo(emprestimo, templates = []) {
   const pessoa = await db.entities.Pessoa.get(emprestimo.pessoa_id);
   const eq = await db.entities.Equipamento.get(emprestimo.equipamento_id);
   
+  // Fetch all kit items
+  let kitItems = [eq];
+  if (eq?.numero_imobilizado?.trim()) {
+    const { data: siblings } = await db.client
+      .from('equipamentos')
+      .select('*')
+      .eq('numero_imobilizado', eq.numero_imobilizado.trim())
+      .neq('id', eq.id);
+    if (siblings && siblings.length > 0) {
+      kitItems = [eq, ...siblings];
+    }
+  }
+  
+  // Prepare kit variables
+  const kitCount = kitItems.length;
+  const kitItemsStr = kitItems
+    .map(item => `${item.tipo || 'Equipamento'} - ${item.numero_serie || '—'}`)
+    .join('\n');
+  
   const isAluno = pessoa?.tipo === 'Aluno';
   const templateType = isAluno ? 'EMPRESTIMO_ALUNO' : 'EMPRESTIMO_DOCENTE';
   const template = templates.find(t => t.tipo === templateType && t.ativo !== false) || templates.find(t => t.tipo === 'EMPRESTIMO');
@@ -100,7 +119,9 @@ export async function gerarPDFEmprestimo(emprestimo, templates = []) {
     data_hoje: formatDate(new Date()),
     uuid: emprestimo.id,
     numero_serie: eq?.numero_serie || '—',
-    numero_imobilizado: eq?.numero_imobilizado || '—'
+    numero_imobilizado: eq?.numero_imobilizado || '—',
+    kit_count: kitCount,
+    kit_items: kitItemsStr
   };
 
   await exportDocument(`Emprestimo_${isAluno ? 'Aluno' : 'Docente'}`, template, vars);
@@ -110,6 +131,25 @@ export async function gerarPDFDevolucao(devolucao, templates = []) {
   const emp = await db.entities.Emprestimo.get(devolucao.emprestimo_id);
   const pessoa = await db.entities.Pessoa.get(emp?.pessoa_id);
   const eq = await db.entities.Equipamento.get(emp?.equipamento_id);
+  
+  // Fetch all kit items
+  let kitItems = [eq];
+  if (eq?.numero_imobilizado?.trim()) {
+    const { data: siblings } = await db.client
+      .from('equipamentos')
+      .select('*')
+      .eq('numero_imobilizado', eq.numero_imobilizado.trim())
+      .neq('id', eq.id);
+    if (siblings && siblings.length > 0) {
+      kitItems = [eq, ...siblings];
+    }
+  }
+  
+  // Prepare kit variables
+  const kitCount = kitItems.length;
+  const kitItemsStr = kitItems
+    .map(item => `${item.tipo || 'Equipamento'} - ${item.numero_serie || '—'}`)
+    .join('\n');
 
   const isAluno = pessoa?.tipo === 'Aluno';
   const templateType = isAluno ? 'DEVOLUCAO_ALUNO' : 'DEVOLUCAO_DOCENTE';
@@ -127,7 +167,9 @@ export async function gerarPDFDevolucao(devolucao, templates = []) {
     data_hoje: formatDate(new Date()),
     uuid: devolucao.id,
     numero_serie: eq?.numero_serie || '—',
-    numero_imobilizado: eq?.numero_imobilizado || '—'
+    numero_imobilizado: eq?.numero_imobilizado || '—',
+    kit_count: kitCount,
+    kit_items: kitItemsStr
   };
 
   await exportDocument(`Devolucao_${isAluno ? 'Aluno' : 'Docente'}`, template, vars);
@@ -136,6 +178,26 @@ export async function gerarPDFDevolucao(devolucao, templates = []) {
 export async function gerarPDFAvaria(avaria, templates = []) {
   const eq = await db.entities.Equipamento.get(avaria.equipamento_id);
   const pessoa = avaria.pessoa_id ? await db.entities.Pessoa.get(avaria.pessoa_id) : null;
+  
+  // Fetch all kit items
+  let kitItems = [eq];
+  if (eq?.numero_imobilizado?.trim()) {
+    const { data: siblings } = await db.client
+      .from('equipamentos')
+      .select('*')
+      .eq('numero_imobilizado', eq.numero_imobilizado.trim())
+      .neq('id', eq.id);
+    if (siblings && siblings.length > 0) {
+      kitItems = [eq, ...siblings];
+    }
+  }
+  
+  // Prepare kit variables
+  const kitCount = kitItems.length;
+  const kitItemsStr = kitItems
+    .map(item => `${item.tipo || 'Equipamento'} - ${item.numero_serie || '—'}`)
+    .join('\n');
+  
   const template = templates.find(t => t.tipo === 'AVARIA' && t.ativo !== false);
 
   const comps = avaria.componentes || {};
@@ -157,12 +219,33 @@ export async function gerarPDFAvaria(avaria, templates = []) {
     data_hoje: formatDate(new Date()),
     uuid: avaria.id,
     numero_serie: eq?.numero_serie || '—',
-    numero_imobilizado: eq?.numero_imobilizado || '—'
+    numero_imobilizado: eq?.numero_imobilizado || '—',
+    kit_count: kitCount,
+    kit_items: kitItemsStr
   };
   await exportDocument('Avaria', template, vars);
 }
 
 export async function gerarPDFEquipamento(equipamento, templates = []) {
+  // Fetch all kit items
+  let kitItems = [equipamento];
+  if (equipamento?.numero_imobilizado?.trim()) {
+    const { data: siblings } = await db.client
+      .from('equipamentos')
+      .select('*')
+      .eq('numero_imobilizado', equipamento.numero_imobilizado.trim())
+      .neq('id', equipamento.id);
+    if (siblings && siblings.length > 0) {
+      kitItems = [equipamento, ...siblings];
+    }
+  }
+  
+  // Prepare kit variables
+  const kitCount = kitItems.length;
+  const kitItemsStr = kitItems
+    .map(item => `${item.tipo || 'Equipamento'} - ${item.numero_serie || '—'}`)
+    .join('\n');
+  
   const template = templates.find(t => t.tipo === 'EQUIPAMENTO' && t.ativo !== false);
   const vars = {
     designacao: equipamento.designacao || '—',
@@ -175,7 +258,9 @@ export async function gerarPDFEquipamento(equipamento, templates = []) {
     data_entrada: formatDate(equipamento.data_entrada),
     notas: equipamento.notas || '—',
     data_hoje: formatDate(new Date()),
-    uuid: equipamento.id
+    uuid: equipamento.id,
+    kit_count: kitCount,
+    kit_items: kitItemsStr
   };
   await exportDocument('Equipamento', template, vars);
 }

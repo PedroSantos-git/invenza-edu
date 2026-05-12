@@ -22,12 +22,12 @@ import { useAuth } from '@/lib/AuthContext';
 import * as XLSX from 'xlsx';
 
 const TEMPLATE_VARS = {
-  EMPRESTIMO_ALUNO: ['{{equipamento}}', '{{pessoa}}', '{{numero_aluno}}', '{{data_emprestimo}}', '{{acessorios}}', '{{notas_entrega}}', '{{data_hoje}}', '{{uuid}}', '{%barcode_serie}', '{%barcode_imobilizado}'],
-  EMPRESTIMO_DOCENTE: ['{{equipamento}}', '{{pessoa}}', '{{numero_docente}}', '{{data_emprestimo}}', '{{acessorios}}', '{{notas_entrega}}', '{{data_hoje}}', '{{uuid}}', '{%barcode_serie}', '{%barcode_imobilizado}'],
-  DEVOLUCAO_ALUNO: ['{{equipamento}}', '{{pessoa}}', '{{numero_aluno}}', '{{data_devolucao}}', '{{estado_equipamento}}', '{{acessorios_devolvidos}}', '{{notas}}', '{{data_hoje}}', '{{uuid}}', '{%barcode_serie}', '{%barcode_imobilizado}'],
-  DEVOLUCAO_DOCENTE: ['{{equipamento}}', '{{pessoa}}', '{{numero_docente}}', '{{data_devolucao}}', '{{estado_equipamento}}', '{{acessorios_devolvidos}}', '{{notas}}', '{{data_hoje}}', '{{uuid}}', '{%barcode_serie}', '{%barcode_imobilizado}'],
-  AVARIA: ['{{equipamento}}', '{{pessoa}}', '{{numero_pessoa}}', '{{estado}}', '{{origem}}', '{{diagnostico}}', '{{resolucao}}', '{{componentes}}', '{{data_registo}}', '{{data_resolucao}}', '{{data_hoje}}', '{{uuid}}', '{%barcode_serie}', '{%barcode_imobilizado}'],
-  EQUIPAMENTO: ['{{designacao}}', '{{numero_serie}}', '{{numero_imobilizado}}', '{{tipo}}', '{{marca}}', '{{modelo}}', '{{estado}}', '{{data_entrada}}', '{{notas}}', '{{data_hoje}}', '{{uuid}}', '{%barcode_serie}', '{%barcode_imobilizado}'],
+  EMPRESTIMO_ALUNO: ['{{equipamento}}', '{{pessoa}}', '{{numero_aluno}}', '{{data_emprestimo}}', '{{acessorios}}', '{{notas_entrega}}', '{{data_hoje}}', '{{uuid}}', '{%barcode_serie}', '{%barcode_imobilizado}', '{{kit_count}}', '{{kit_items}}'],
+  EMPRESTIMO_DOCENTE: ['{{equipamento}}', '{{pessoa}}', '{{numero_docente}}', '{{data_emprestimo}}', '{{acessorios}}', '{{notas_entrega}}', '{{data_hoje}}', '{{uuid}}', '{%barcode_serie}', '{%barcode_imobilizado}', '{{kit_count}}', '{{kit_items}}'],
+  DEVOLUCAO_ALUNO: ['{{equipamento}}', '{{pessoa}}', '{{numero_aluno}}', '{{data_devolucao}}', '{{estado_equipamento}}', '{{acessorios_devolvidos}}', '{{notas}}', '{{data_hoje}}', '{{uuid}}', '{%barcode_serie}', '{%barcode_imobilizado}', '{{kit_count}}', '{{kit_items}}'],
+  DEVOLUCAO_DOCENTE: ['{{equipamento}}', '{{pessoa}}', '{{numero_docente}}', '{{data_devolucao}}', '{{estado_equipamento}}', '{{acessorios_devolvidos}}', '{{notas}}', '{{data_hoje}}', '{{uuid}}', '{%barcode_serie}', '{%barcode_imobilizado}', '{{kit_count}}', '{{kit_items}}'],
+  AVARIA: ['{{equipamento}}', '{{pessoa}}', '{{numero_pessoa}}', '{{estado}}', '{{origem}}', '{{diagnostico}}', '{{resolucao}}', '{{componentes}}', '{{data_registo}}', '{{data_resolucao}}', '{{data_hoje}}', '{{uuid}}', '{%barcode_serie}', '{%barcode_imobilizado}', '{{kit_count}}', '{{kit_items}}'],
+  EQUIPAMENTO: ['{{designacao}}', '{{numero_serie}}', '{{numero_imobilizado}}', '{{tipo}}', '{{marca}}', '{{modelo}}', '{{estado}}', '{{data_entrada}}', '{{notas}}', '{{data_hoje}}', '{{uuid}}', '{%barcode_serie}', '{%barcode_imobilizado}', '{{kit_count}}', '{{kit_items}}'],
 };
 
 const EMAIL_TEMPLATE_VARS = {
