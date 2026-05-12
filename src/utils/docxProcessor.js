@@ -84,9 +84,10 @@ export const DocxProcessor = {
         parser: (tag) => {
           return {
             get(scope) {
+              if (!scope) return '';
               // Se a tag começar por %, tratamos como imagem/barcode (opcional no parser, o ImageModule trata)
               const cleanTag = tag.startsWith('%') ? tag.substring(1) : tag;
-              let value = scope[cleanTag] || scope[tag];
+              let value = scope[cleanTag] ?? scope[tag] ?? '';
               
               if (typeof value === 'string' && value.startsWith('BOLD:')) {
                 return value.replace('BOLD:', '');

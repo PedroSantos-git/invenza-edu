@@ -99,15 +99,20 @@ viii. \t Está vedada a realização de comunicações em roaming fora da UE.
 /**
  * Main export function: Prioritizes DOCX substitution, falls back to HTML-to-PDF
  */
-async function exportDocument(title, template, vars) {
+async function exportDocument(title, template, vars = {}) {
+  if (!vars) vars = {};
   // Map barcodes if they are base64 images
   const docxData = { ...vars };
   
   if (vars.numero_serie && !vars.barcode_serie) {
-    vars.barcode_serie = await DocxProcessor.generateBarcode(vars.numero_serie);
+    try {
+      vars.barcode_serie = await DocxProcessor.generateBarcode(vars.numero_serie);
+    } catch (e) { console.error('Barcode error:', e); }
   }
   if (vars.numero_imobilizado && !vars.barcode_imobilizado) {
-    vars.barcode_imobilizado = await DocxProcessor.generateBarcode(vars.numero_imobilizado);
+    try {
+      vars.barcode_imobilizado = await DocxProcessor.generateBarcode(vars.numero_imobilizado);
+    } catch (e) { console.error('Barcode error:', e); }
   }
 
   // Ensure barcode variables are available for DOCX without the % prefix in the data object
@@ -391,13 +396,14 @@ export async function gerarPDFEmprestimo(emprestimo, templates = [], currentUser
   }
   
   // Prepare kit variables
-  const kitCount = kitItems.length;
-  const kitItemsStr = kitItems
+  const validKitItems = (kitItems || []).filter(Boolean);
+  const kitCount = validKitItems.length;
+  const kitItemsStr = validKitItems
     .map(item => `${item.tipo || 'Equipamento'} - ${item.numero_serie || '—'}`)
     .join('\n');
   
   // Prepare structured equipment sections
-  const equipmentSections = generateEquipmentSections(kitItems);
+  const equipmentSections = generateEquipmentSections(validKitItems);
   
   const isAluno = pessoa?.tipo === 'Aluno';
   const templateType = isAluno ? 'EMPRESTIMO_ALUNO' : 'EMPRESTIMO_DOCENTE';
@@ -452,7 +458,7 @@ export async function gerarPDFEmprestimo(emprestimo, templates = [], currentUser
     kit_items: kitItemsStr,
     
     // New variables
-    data_hora: formatDataHora(devolucao.data_devolucao || devolucao.created_at),
+    data_hora: formatDataHora(emprestimo.data_emprestimo || emprestimo.created_at),
     ee_nome: pessoa?.ee_nome || '—',
     ee_nif: pessoa?.ee_nif || '—',
     nome_aluno: isAluno ? pessoa?.nome : '—',
@@ -497,13 +503,14 @@ export async function gerarPDFDevolucao(devolucao, templates = [], currentUser =
   }
   
   // Prepare kit variables
-  const kitCount = kitItems.length;
-  const kitItemsStr = kitItems
+  const validKitItems = (kitItems || []).filter(Boolean);
+  const kitCount = validKitItems.length;
+  const kitItemsStr = validKitItems
     .map(item => `${item.tipo || 'Equipamento'} - ${item.numero_serie || '—'}`)
     .join('\n');
   
   // Prepare structured equipment sections
-  const equipmentSections = generateEquipmentSections(kitItems);
+  const equipmentSections = generateEquipmentSections(validKitItems);
 
   const isAluno = pessoa?.tipo === 'Aluno';
   const templateType = isAluno ? 'DEVOLUCAO_ALUNO' : 'DEVOLUCAO_DOCENTE';
@@ -564,13 +571,14 @@ export async function gerarPDFAvaria(avaria, templates = [], currentUser = null)
   }
   
   // Prepare kit variables
-  const kitCount = kitItems.length;
-  const kitItemsStr = kitItems
+  const validKitItems = (kitItems || []).filter(Boolean);
+  const kitCount = validKitItems.length;
+  const kitItemsStr = validKitItems
     .map(item => `${item.tipo || 'Equipamento'} - ${item.numero_serie || '—'}`)
     .join('\n');
   
   // Prepare structured equipment sections
-  const equipmentSections = generateEquipmentSections(kitItems);
+  const equipmentSections = generateEquipmentSections(validKitItems);
   
   const template = templates.find(t => t.tipo === 'AVARIA' && t.ativo !== false);
 
@@ -625,13 +633,14 @@ export async function gerarPDFEquipamento(equipamento, templates = [], currentUs
   }
   
   // Prepare kit variables
-  const kitCount = kitItems.length;
-  const kitItemsStr = kitItems
+  const validKitItems = (kitItems || []).filter(Boolean);
+  const kitCount = validKitItems.length;
+  const kitItemsStr = validKitItems
     .map(item => `${item.tipo || 'Equipamento'} - ${item.numero_serie || '—'}`)
     .join('\n');
   
   // Prepare structured equipment sections
-  const equipmentSections = generateEquipmentSections(kitItems);
+  const equipmentSections = generateEquipmentSections(validKitItems);
   
   const template = templates.find(t => t.tipo === 'EQUIPAMENTO' && t.ativo !== false);
   const vars = {
