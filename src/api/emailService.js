@@ -91,7 +91,7 @@ export const EmailService = {
       await db.entities.EmailHistorico.create({
         pessoa_id,
         destinatario: to,
-        assunto,
+        assunto: subject,
         conteudo: finalBody,
         tipo,
         status: 'SUCESSO'
@@ -109,7 +109,7 @@ export const EmailService = {
         await db.entities.EmailHistorico.create({
           pessoa_id,
           destinatario: to,
-          assunto,
+          assunto: subject,
           conteudo: errorLogBody,
           tipo,
           status: 'ERRO',
