@@ -147,7 +147,7 @@ function fillHtmlVariables(html, vars) {
   return content;
 }
 
-export async function gerarPDFEmprestimo(emprestimo, templates = []) {
+export async function gerarPDFEmprestimo(emprestimo, templates = [], currentUser = null) {
   // Fetch full data if needed
   const pessoa = await db.entities.Pessoa.get(emprestimo.pessoa_id);
   const eq = await db.entities.Equipamento.get(emprestimo.equipamento_id);
@@ -224,6 +224,7 @@ ${pessoa?.nome || '—'}, Docente, com o NIF ${pessoa?.nif || '—'}.
     nome_docente: !isAluno ? pessoa?.nome : '—',
     nif_docente: !isAluno ? pessoa?.nif : '—',
     cabecalho_entrega: cabecalhoEntrega,
+    utilizador_atual: currentUser?.full_name || '—',
     
     // Equipment section variables
     equipamento_secoes: equipmentSections.map(s => s.content).join(''),
@@ -234,7 +235,7 @@ ${pessoa?.nome || '—'}, Docente, com o NIF ${pessoa?.nif || '—'}.
   await exportDocument(`Emprestimo_${isAluno ? 'Aluno' : 'Docente'}`, template, vars);
 }
 
-export async function gerarPDFDevolucao(devolucao, templates = []) {
+export async function gerarPDFDevolucao(devolucao, templates = [], currentUser = null) {
   const emp = await db.entities.Emprestimo.get(devolucao.emprestimo_id);
   const pessoa = await db.entities.Pessoa.get(emp?.pessoa_id);
   const eq = await db.entities.Equipamento.get(emp?.equipamento_id);
@@ -291,6 +292,7 @@ export async function gerarPDFDevolucao(devolucao, templates = []) {
     turma_aluno: isAluno ? pessoa?.turma : '—',
     nome_docente: !isAluno ? pessoa?.nome : '—',
     nif_docente: !isAluno ? pessoa?.nif : '—',
+    utilizador_atual: currentUser?.full_name || '—',
     
     // Equipment section variables
     equipamento_secoes: equipmentSections.map(s => s.content).join(''),
@@ -301,7 +303,7 @@ export async function gerarPDFDevolucao(devolucao, templates = []) {
   await exportDocument(`Devolucao_${isAluno ? 'Aluno' : 'Docente'}`, template, vars);
 }
 
-export async function gerarPDFAvaria(avaria, templates = []) {
+export async function gerarPDFAvaria(avaria, templates = [], currentUser = null) {
   const eq = await db.entities.Equipamento.get(avaria.equipamento_id);
   const pessoa = avaria.pessoa_id ? await db.entities.Pessoa.get(avaria.pessoa_id) : null;
   
@@ -355,6 +357,8 @@ export async function gerarPDFAvaria(avaria, templates = []) {
     // New variables
     data_hora: formatDataHora(),
     
+    utilizador_atual: currentUser?.full_name || '—',
+    
     // Equipment section variables
     equipamento_secoes: equipmentSections.map(s => s.content).join(''),
     equipamento_secao_a: equipmentSections.find(s => s.letter === 'A')?.content || '',
@@ -363,7 +367,7 @@ export async function gerarPDFAvaria(avaria, templates = []) {
   await exportDocument('Avaria', template, vars);
 }
 
-export async function gerarPDFEquipamento(equipamento, templates = []) {
+export async function gerarPDFEquipamento(equipamento, templates = [], currentUser = null) {
   // Fetch all kit items
   let kitItems = [equipamento];
   if (equipamento?.numero_imobilizado?.trim()) {
@@ -404,6 +408,8 @@ export async function gerarPDFEquipamento(equipamento, templates = []) {
     
     // New variables
     data_hora: formatDataHora(),
+    
+    utilizador_atual: currentUser?.full_name || '—',
     
     // Equipment section variables
     equipamento_secoes: equipmentSections.map(s => s.content).join(''),

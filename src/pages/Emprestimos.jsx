@@ -266,7 +266,7 @@ export default function Emprestimos() {
         pessoa_info: selectedPessoa.nome,
         acessorios_entregues: acessorios,
         notas_entrega: notas
-      }, pdfTemplates);
+      }, pdfTemplates, user);
       resetForm();
       toast.success('Empréstimo registado. PDF gerado.');
     }
@@ -782,7 +782,7 @@ export default function Emprestimos() {
 
   const handlePDF = (emp, e) => {
     if (e) e.stopPropagation();
-    gerarPDFEmprestimo(emp, pdfTemplates);
+    gerarPDFEmprestimo(emp, pdfTemplates, user);
   };
 
   const handleEdit = (emp) => {
@@ -1211,7 +1211,7 @@ export default function Emprestimos() {
                 <Button variant="outline" size="sm" onClick={() => handleEdit(detailItem)}>
                   Editar Detalhes
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => { gerarPDFEmprestimo(detailItem, pdfTemplates); }}>
+                <Button variant="outline" size="sm" onClick={() => { gerarPDFEmprestimo(detailItem, pdfTemplates, user); }}>
                   <FileDown className="w-4 h-4 mr-1" />PDF
                 </Button>
               </div>

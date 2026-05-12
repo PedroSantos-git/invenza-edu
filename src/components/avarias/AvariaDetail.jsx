@@ -175,7 +175,7 @@ export default function AvariaDetail({ open, onClose, avaria }) {
                 <Button variant="outline" size="sm" onClick={() => setShowEquipDetail(true)}>
                   <History className="w-4 h-4 mr-1" />Histório Equipamento
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => gerarPDFAvaria(avaria, null)}>
+                <Button variant="outline" size="sm" onClick={() => gerarPDFAvaria(avaria, null, user)}>
                   <FileDown className="w-4 h-4 mr-1" />PDF
                 </Button>
                 {!isClosed && !editing && <Button variant="outline" size="sm" onClick={startEdit}>Editar</Button>}

@@ -122,7 +122,7 @@ export default function Equipamentos() {
 
   const handlePDF = (eq, e) => {
     e.stopPropagation();
-    gerarPDFEquipamento(eq, pdfTemplates);
+    gerarPDFEquipamento(eq, pdfTemplates, user);
   };
 
   return (

@@ -21,6 +21,7 @@ import { gerarPDFAvaria, gerarRelatorioImportacaoAvariasPDF } from '@/utils/pdfG
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import { useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/lib/AuthContext';
 import { Progress } from '@/components/ui/progress';
 
 const SortButton = ({ column, currentSort, onSort, label }) => {
@@ -60,6 +61,7 @@ const COMPONENTES = [
 
 export default function Avarias() {
   const qc = useQueryClient();
+  const { user } = useAuth();
   const location = useLocation();
   const [search, setSearch] = useState('');
   const [filtroEstado, setFiltroEstado] = useState('pendentes');
@@ -598,7 +600,7 @@ export default function Avarias() {
                     {av.created_at ? format(new Date(av.created_at), 'dd/MM/yyyy') : '—'}
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="icon" onClick={e => { e.stopPropagation(); gerarPDFAvaria(av, pdfTemplates); }}><FileDown className="w-4 h-4" /></Button>
+                    <Button variant="ghost" size="icon" onClick={e => { e.stopPropagation(); gerarPDFAvaria(av, pdfTemplates, user); }}><FileDown className="w-4 h-4" /></Button>
                   </TableCell>
                 </TableRow>
               ))
