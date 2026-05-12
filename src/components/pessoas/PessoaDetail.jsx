@@ -79,6 +79,17 @@ export default function PessoaDetail({ open, onClose, pessoa }) {
                   <div className="col-span-2"><p className="text-xs text-muted-foreground">Morada</p><p className="font-medium">{pessoa.morada || '—'}</p></div>
                   <div><p className="text-xs text-muted-foreground">Email Pessoal</p><p className="font-medium">{pessoa.email_pessoal || '—'}</p></div>
                 </div>
+                
+                {pessoa.tipo === 'Docente' && (
+                  <div className="p-4 border border-violet-100 rounded-lg space-y-3 bg-violet-50/30 shadow-sm">
+                    <h4 className="text-sm font-bold text-violet-700 border-b border-violet-100 pb-2 uppercase tracking-wider text-[11px]">Dados do Docente</h4>
+                    <div className="grid grid-cols-3 gap-3 text-sm">
+                      <div><p className="text-xs text-violet-900/60 font-medium">Grupo Recrutamento</p><p className="font-semibold text-violet-900">{pessoa.grupo_recrutamento || '—'}</p></div>
+                      <div><p className="text-xs text-violet-900/60 font-medium">QE</p><p className="font-medium text-violet-900">{pessoa.qe || '—'}</p></div>
+                      <div><p className="text-xs text-violet-900/60 font-medium">Nº CC</p><p className="font-medium text-violet-900">{pessoa.cc_numero || '—'}</p></div>
+                    </div>
+                  </div>
+                )}
 
                 {pessoa.tipo === 'Aluno' && (
                   <div className="p-4 border border-blue-100 rounded-lg space-y-3 bg-blue-50/30 shadow-sm">

@@ -635,6 +635,27 @@ export default function Pessoas() {
                 </div>
               </fieldset>
             )}
+            {form.tipo === 'Docente' && (
+              <fieldset className="border rounded-lg p-4 space-y-4 bg-violet-50/40 border-violet-100 shadow-sm transition-all">
+                <legend className="-ml-1 px-2 text-[11px] uppercase tracking-wider font-bold text-violet-700 bg-white border border-violet-100 rounded-md">
+                  Dados do Docente
+                </legend>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <Label className="text-violet-900/70">Grupo de Recrutamento</Label>
+                    <Input className="bg-white/80 border-violet-100 focus-visible:ring-violet-200" value={form.grupo_recrutamento || ''} onChange={e => setForm({...form, grupo_recrutamento: e.target.value})} />
+                  </div>
+                  <div>
+                    <Label className="text-violet-900/70">QE</Label>
+                    <Input className="bg-white/80 border-violet-100 focus-visible:ring-violet-200" value={form.qe || ''} onChange={e => setForm({...form, qe: e.target.value})} />
+                  </div>
+                  <div>
+                    <Label className="text-violet-900/70">Nº CC</Label>
+                    <Input className="bg-white/80 border-violet-100 focus-visible:ring-violet-200" value={form.cc_numero || ''} onChange={e => setForm({...form, cc_numero: e.target.value})} />
+                  </div>
+                </div>
+              </fieldset>
+            )}
 
             <FileUpload files={fotoFiles} onChange={setFotoFiles} label="Foto de Perfil" />
             <div className="flex justify-end gap-3 pt-2">
@@ -671,7 +692,10 @@ export default function Pessoas() {
             ee_morada: { type: 'string' },
             ee_email: { type: 'string' },
             ee_nif: { type: 'string' },
-            ee_telefone: { type: 'string' }
+            ee_telefone: { type: 'string' },
+            grupo_recrutamento: { type: 'string' },
+            qe: { type: 'string' },
+            cc_numero: { type: 'string' }
           }
         }}
       />
