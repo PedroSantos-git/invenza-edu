@@ -435,6 +435,38 @@ export async function prepareLoanVars(emprestimo, pessoa, eq, kitItems, currentU
     cabecalhoEntrega = `Auto de Entrega nº ${emprestimo.id}\n\nNo dia ${dataParte}, às ${horaParte}, na Escola Secundária D. João II, Setúbal, sita na R. Dr. Luís Macedo e Castro 2914-510 SETÚBAL procedeu-se à entrega temporária e gratuita dos bens e equipamentos informáticos, abaixo descritos a:\n\n${infoDocente}.`;
   }
 
+  let cabecalhoDevolucao = '';
+  if (!isBorrow) {
+    if (isAluno) {
+      const infoAluno = [
+        pessoa?.ee_nome ? `${pessoa.ee_nome}, Encarregado de Educação` : '',
+        pessoa?.ee_nif ? `com o NIF ${pessoa.ee_nif}` : '',
+        pessoa?.ee_cc ? `titular do Cartão de cidadão n.º ${pessoa.ee_cc}` : '',
+        pessoa?.nome ? `do aluno ${pessoa.nome}` : '',
+        'matriculado na Escola Secundária D. João II, Setúbal',
+        pessoa?.turma ? `a frequentar o ${pessoa.turma}` : '',
+        pessoa?.morada ? `${pessoa.morada}` : '',
+        pessoa?.nif ? `com o NIF ${pessoa.nif}` : '',
+        pessoa?.cc_numero ? `titular do Cartão de cidadão n.º ${pessoa.cc_numero}` : ''
+      ].filter(Boolean).join(', ');
+
+      cabecalhoDevolucao = `No dia ${dataParte}, às ${horaParte}, na Escola Secundária D. João II, Setúbal, procedeu-se à recolha e receção dos bens e equipamentos informáticos, abaixo descritos e que estavam na posse de:\n\n${infoAluno}, conforme auto de entrega nº ${emprestimo.id}.`;
+    } else {
+      const infoDocente = [
+        pessoa?.nome ? `${pessoa.nome}, Docente` : '',
+        pessoa?.grupo_recrutamento ? `do grupo de recrutamento ${pessoa.grupo_recrutamento}` : '',
+        pessoa?.qe ? `do QE ${pessoa.qe}` : '',
+        pessoa?.email ? `email ${pessoa.email}` : '',
+        'a exercer funções letivas no Escola Secundária D. João II, Setúbal',
+        pessoa?.morada ? `e residente em ${pessoa.morada}` : '',
+        pessoa?.nif ? `com o NIF ${pessoa.nif}` : '',
+        pessoa?.cc_numero ? `titular do Cartão de cidadão n.º ${pessoa.cc_numero}` : ''
+      ].filter(Boolean).join(', ');
+
+      cabecalhoDevolucao = `No dia ${dataParte}, às ${horaParte}, na Escola Secundária D. João II, Setúbal, procedeu-se à recolha e receção dos bens e equipamentos informáticos, abaixo descritos e que estavam na posse de:\n\n${infoDocente}, conforme auto de entrega nº ${emprestimo.id}.`;
+    }
+  }
+
   return {
     equipamento: eq?.designacao || (isBorrow ? emprestimo.equipamento_info : emprestimo.equipamento_info) || '—',
     pessoa: pessoa?.nome || (isBorrow ? emprestimo.pessoa_info : emprestimo.pessoa_info) || '—',
@@ -468,6 +500,7 @@ export async function prepareLoanVars(emprestimo, pessoa, eq, kitItems, currentU
     nome_docente: !isAluno ? (pessoa?.nome || '—') : '—',
     nif_docente: !isAluno ? (pessoa?.nif || '—') : '—',
     cabecalho_entrega: cabecalhoEntrega || '—',
+    cabecalho_devolucao: cabecalhoDevolucao || '—',
     utilizador_atual: currentUser?.full_name || '—',
     
     // Docente-specific variables
