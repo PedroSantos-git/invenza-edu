@@ -111,7 +111,7 @@ export default function RichTextEditor({
       
       <div className="border rounded-md overflow-hidden bg-white">
         <Editor
-          apiKey="no-api-key"
+          apiKey="r0irnu29j30cxahbuwmlrhen8yt6fyvg7kl8z6iry6ka9noa"
           init={{
             height,
             menubar,
@@ -119,10 +119,9 @@ export default function RichTextEditor({
             plugins,
             toolbar,
             content_style: 'body { font-family:Helvetica,Arial,sans-serif; font-size:14px; padding: 20px; }',
-            language: 'pt_PT',
+            language: 'pt-PT',
             branding: false,
             promotion: false,
-            license_key: 'gpl',
             placeholder
           }}
           value={value}
