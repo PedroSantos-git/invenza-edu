@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Pencil, Plus, Trash2, Settings, FileUp, FileDown, Eye, Loader2, Info, Mail, Clock, ShieldCheck, MailPlus, Upload, Image, Database, CheckSquare, Square, RefreshCcw, HardDriveDownload, HardDriveUpload } from 'lucide-react';
+import { Pencil, Plus, Trash2, Settings, FileUp, FileDown, Eye, Loader2, Info, Mail, Clock, ShieldCheck, MailPlus, Upload, Image, Database, CheckSquare, Square, RefreshCcw, HardDriveDownload, HardDriveUpload, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { DocxProcessor } from '@/utils/docxProcessor';
 import mammoth from 'mammoth';
@@ -1215,6 +1215,17 @@ export default function Configuracoes() {
             </div>
             <div className="space-y-3"><Label>Ficheiro DOCX</Label>
               <div className="flex flex-wrap gap-3 items-center"><input type="file" id="docx-upload" className="hidden" accept=".docx" onChange={handleFileChange} /><Button asChild variant="default" className="bg-blue-600 hover:bg-blue-700"><label htmlFor="docx-upload" className="cursor-pointer"><FileUp className="w-4 h-4 mr-2" /> {templateForm.file_base64 ? 'Substituir' : 'Carregar'}</label></Button>
+                <Button type="button" variant="outline" onClick={async () => {
+                  const toastId = toast.loading('A criar template padrão para empréstimo de aluno...');
+                  try {
+                    const { base64 } = await DocxProcessor.generateDefaultStudentLoanTemplate();
+                    const result = await DocxProcessor.parseDocx(new Blob([Uint8Array.from(atob(base64), c => c.charCodeAt(0))], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }));
+                    setTemplateForm(prev => ({ ...prev, file_base64: result.base64, conteudo: result.html }));
+                    toast.success('Template padrão criado com sucesso!', { id: toastId });
+                  } catch (err) {
+                    toast.error('Erro ao criar template padrão: ' + err.message, { id: toastId });
+                  }
+                }}><FileText className="w-4 h-4 mr-2" /> Template Padrão Empréstimo Aluno</Button>
                 {templateForm.file_base64 && <><Button type="button" variant="outline" onClick={downloadDocx}><FileDown className="w-4 h-4 mr-2" /> Baixar</Button><Button type="button" variant="outline" onClick={async () => {
                   const toastId = toast.loading('A reconstruir template limpo...');
                   try {
