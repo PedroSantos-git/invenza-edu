@@ -1215,7 +1215,17 @@ export default function Configuracoes() {
             </div>
             <div className="space-y-3"><Label>Ficheiro DOCX</Label>
               <div className="flex flex-wrap gap-3 items-center"><input type="file" id="docx-upload" className="hidden" accept=".docx" onChange={handleFileChange} /><Button asChild variant="default" className="bg-blue-600 hover:bg-blue-700"><label htmlFor="docx-upload" className="cursor-pointer"><FileUp className="w-4 h-4 mr-2" /> {templateForm.file_base64 ? 'Substituir' : 'Carregar'}</label></Button>
-                {templateForm.file_base64 && <Button type="button" variant="outline" onClick={downloadDocx}><FileDown className="w-4 h-4 mr-2" /> Baixar</Button>}
+                {templateForm.file_base64 && <><Button type="button" variant="outline" onClick={downloadDocx}><FileDown className="w-4 h-4 mr-2" /> Baixar</Button><Button type="button" variant="outline" onClick={async () => {
+                  const toastId = toast.loading('A reconstruir template limpo...');
+                  try {
+                    const { base64 } = await DocxProcessor.rebuildCleanDocx(templateForm.conteudo);
+                    const result = await DocxProcessor.parseDocx(new Blob([Uint8Array.from(atob(base64), c => c.charCodeAt(0))], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }));
+                    setTemplateForm(prev => ({ ...prev, file_base64: result.base64, conteudo: result.html }));
+                    toast.success('Template reconstruído com sucesso!', { id: toastId });
+                  } catch (err) {
+                    toast.error('Erro ao reconstruir template: ' + err.message, { id: toastId });
+                  }
+                }}><RefreshCcw className="w-4 h-4 mr-2" /> Reconstruir Template Limpo</Button></>}
               </div>
             </div>
             {templateForm.file_base64 && <div className="space-y-2"><Label className="flex items-center gap-2"><Eye className="w-4 h-4" /> Pré-visualização</Label><DocxPreview base64={templateForm.file_base64} /></div>}

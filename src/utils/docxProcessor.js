@@ -5,6 +5,7 @@ import { saveAs } from 'file-saver';
 import mammoth from 'mammoth';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
+import { Document, Packer, Paragraph, TextRun } from 'docx';
 /**
  * Utility to handle native DOCX templates
  */
@@ -151,5 +152,64 @@ export const DocxProcessor = {
     } finally {
       document.body.removeChild(container);
     }
+  },
+  
+  /**
+   * Rebuilds a clean DOCX from HTML (removes broken tags)
+   */
+  async rebuildCleanDocx(htmlContent) {
+    // Parse HTML to extract plain text with tags intact
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = htmlContent;
+    
+    // Create paragraphs from the HTML content
+    const children = Array.from(tempDiv.childNodes);
+    const paragraphs = [];
+    
+    for (const node of children) {
+      if (node.nodeName === 'P' || node.nodeName === 'DIV') {
+        const textRuns = [];
+        const nodeChildren = Array.from(node.childNodes);
+        
+        for (const child of nodeChildren) {
+          if (child.nodeType === Node.TEXT_NODE) {
+            textRuns.push(new TextRun(child.textContent));
+          } else if (child.nodeName === 'BR') {
+            textRuns.push(new TextRun({ break: 1 }));
+          } else if (child.nodeName === 'STRONG' || child.nodeName === 'B') {
+            textRuns.push(new TextRun({ text: child.textContent, bold: true }));
+          } else if (child.nodeName === 'EM' || child.nodeName === 'I') {
+            textRuns.push(new TextRun({ text: child.textContent, italics: true }));
+          } else {
+            textRuns.push(new TextRun(child.textContent));
+          }
+        }
+        
+        paragraphs.push(new Paragraph({ children: textRuns.length > 0 ? textRuns : [new TextRun('')] }));
+      } else if (node.nodeType === Node.TEXT_NODE && node.textContent.trim()) {
+        paragraphs.push(new Paragraph({ children: [new TextRun(node.textContent)] }));
+      } else if (node.nodeName === 'BR') {
+        paragraphs.push(new Paragraph({ children: [new TextRun('')] }));
+      }
+    }
+    
+    // Create the DOCX document
+    const doc = new Document({
+      sections: [{
+        properties: {},
+        children: paragraphs.length > 0 ? paragraphs : [new Paragraph('')]
+      }]
+    });
+    
+    // Generate the blob and convert to Base64
+    const blob = await Packer.toBlob(doc);
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64 = reader.result.split(',')[1];
+        resolve({ base64, blob });
+      };
+      reader.readAsDataURL(blob);
+    });
   }
 };
