@@ -27,13 +27,15 @@ function formatAcessorios(obj = {}) {
     .join(', ') || 'Nenhum';
 }
 
-function formatDataHora() {
-  const now = new Date();
-  const dia = now.getDate().toString().padStart(2, '0');
-  const mes = (now.getMonth() + 1).toString().padStart(2, '0');
-  const ano = now.getFullYear();
-  const horas = now.getHours().toString().padStart(2, '0');
-  const minutos = now.getMinutes().toString().padStart(2, '0');
+function formatDataHora(dateInput = null) {
+  const date = dateInput ? new Date(dateInput) : new Date();
+  if (isNaN(date.getTime())) return '—';
+
+  const dia = date.getDate().toString().padStart(2, '0');
+  const mes = (date.getMonth() + 1).toString().padStart(2, '0');
+  const ano = date.getFullYear();
+  const horas = date.getHours().toString().padStart(2, '0');
+  const minutos = date.getMinutes().toString().padStart(2, '0');
   return `${dia}/${mes}/${ano}, às ${horas} horas e ${minutos} minutos`;
 }
 
@@ -402,7 +404,7 @@ export async function gerarPDFEmprestimo(emprestimo, templates = [], currentUser
   const template = templates.find(t => t.tipo === templateType && t.ativo !== false) || templates.find(t => t.tipo === 'EMPRESTIMO');
 
   // Generate header section
-  const dataHoraStr = formatDataHora();
+  const dataHoraStr = formatDataHora(emprestimo.data_emprestimo || emprestimo.created_at);
   const dataParte = dataHoraStr.split(', às ')[0];
   const horaParte = dataHoraStr.split(', às ')[1];
   
@@ -450,7 +452,7 @@ export async function gerarPDFEmprestimo(emprestimo, templates = [], currentUser
     kit_items: kitItemsStr,
     
     // New variables
-    data_hora: formatDataHora(),
+    data_hora: formatDataHora(devolucao.data_devolucao || devolucao.created_at),
     ee_nome: pessoa?.ee_nome || '—',
     ee_nif: pessoa?.ee_nif || '—',
     nome_aluno: isAluno ? pessoa?.nome : '—',
@@ -596,7 +598,7 @@ export async function gerarPDFAvaria(avaria, templates = [], currentUser = null)
     kit_items: kitItemsStr,
     
     // New variables
-    data_hora: formatDataHora(),
+    data_hora: formatDataHora(avaria.created_date || avaria.created_at),
     
     utilizador_atual: currentUser?.full_name || '—',
     
@@ -644,6 +646,7 @@ export async function gerarPDFEquipamento(equipamento, templates = [], currentUs
     notas: equipamento.notas || '—',
     data_hoje: formatDate(new Date()),
     uuid: equipamento.id,
+    data_hora: formatDataHora(),
     kit_count: kitCount,
     kit_items: kitItemsStr,
     
