@@ -721,7 +721,7 @@ export default function Configuracoes() {
       <Tabs defaultValue="tipos" className="w-full">
         <TabsList className="grid w-full grid-cols-7">
           <TabsTrigger value="tipos">Tipos Equipamento</TabsTrigger>
-          <TabsTrigger value="templates">Templates PDF</TabsTrigger>
+          <TabsTrigger value="templates">Templates de Documentos</TabsTrigger>
           <TabsTrigger value="email">Config. Email</TabsTrigger>
           <TabsTrigger value="email-templates">Templates Email</TabsTrigger>
           <TabsTrigger value="horario">Horário</TabsTrigger>
@@ -764,7 +764,7 @@ export default function Configuracoes() {
             <Table>
               <TableHeader><TableRow className="bg-muted/50"><TableHead>Tipo</TableHead><TableHead>Título</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
               <TableBody>
-                {templates.length === 0 ? <TableRow><TableCell colSpan={3} className="text-center py-8 text-muted-foreground">Nenhum template PDF.</TableCell></TableRow> :
+                {templates.length === 0 ? <TableRow><TableCell colSpan={3} className="text-center py-8 text-muted-foreground">Nenhum template configurado.</TableCell></TableRow> :
                   templates.map(t => (
                     <TableRow key={t.id}><TableCell><span className="text-xs font-mono bg-muted px-2 py-0.5 rounded">{t.tipo}</span></TableCell><TableCell className="font-medium">{t.titulo}</TableCell>
                       <TableCell className="text-right space-x-1"><Button variant="ghost" size="icon" onClick={() => openTemplateForm(t)}><Pencil className="w-4 h-4" /></Button><Button variant="ghost" size="icon" onClick={() => { if (confirm('Desativar este template?')) deleteTemplateMutation.mutate(t.id); }}><Trash2 className="w-4 h-4 text-red-500" /></Button></TableCell>
@@ -1201,7 +1201,7 @@ export default function Configuracoes() {
         <DialogContent className="max-w-3xl max-h-[95vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{templateSelected?.id ? 'Editar Template' : 'Novo Template'}</DialogTitle>
-            <DialogDescription>Configura o template DOCX e as variáveis para geração de documentos PDF.</DialogDescription>
+            <DialogDescription>Configura o template DOCX e as variáveis para geração de documentos Word.</DialogDescription>
           </DialogHeader>
           <div className="space-y-6">
             <div className="grid grid-cols-2 gap-4">

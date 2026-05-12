@@ -18,9 +18,8 @@ import { toast } from 'sonner';
 import { format, isValid } from 'date-fns';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { History, FileDown, Eye, Loader2 } from 'lucide-react';
+import { History, Eye, Loader2 } from 'lucide-react';
 import { repairR2Url, isImageDoc } from '@/utils/r2Helpers';
-import { gerarPDFAvaria } from '@/utils/pdfGenerator';
 import { useAuth } from '@/lib/AuthContext';
 import { useQuery } from '@tanstack/react-query';
 
@@ -174,9 +173,6 @@ export default function AvariaDetail({ open, onClose, avaria }) {
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={() => setShowEquipDetail(true)}>
                   <History className="w-4 h-4 mr-1" />Histório Equipamento
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => gerarPDFAvaria(avaria, null, user)}>
-                  <FileDown className="w-4 h-4 mr-1" />PDF
                 </Button>
                 {!isClosed && !editing && <Button variant="outline" size="sm" onClick={startEdit}>Editar</Button>}
               </div>

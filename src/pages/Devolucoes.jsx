@@ -293,7 +293,7 @@ export default function Devolucoes() {
       qc.invalidateQueries();
       gerarPDFDevolucao({ ...devolucao, equipamento_info: eqInfo, pessoa_info: pessoaInfo, acessorios_devolvidos: acessoriosDevolvidos }, pdfTemplates, user);
       resetForm();
-      toast.success('Devolução registada. PDF gerado.');
+      toast.success('Devolução registada. Auto gerado.');
     }
   });
 
@@ -704,8 +704,8 @@ export default function Devolucoes() {
                 <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
                 <p className="text-xs text-amber-800">
                   {estadoEquipamento === 'OK' 
-                    ? 'O equipamento ficará disponível para novo empréstimo. Um PDF será gerado.' 
-                    : 'Avaria será criada automaticamente. Um PDF será gerado.'}
+                    ? 'O equipamento ficará disponível para novo empréstimo. O Auto será gerado.' 
+                    : 'Avaria será criada automaticamente. O Auto será gerado.'}
                 </p>
               </div>
               <div className="flex justify-end gap-3">

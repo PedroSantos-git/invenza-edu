@@ -268,7 +268,7 @@ export default function Emprestimos() {
         notas_entrega: notas
       }, pdfTemplates, user);
       resetForm();
-      toast.success('Empréstimo registado. PDF gerado.');
+      toast.success('Empréstimo registado. Auto gerado.');
     }
   });
 
@@ -1057,7 +1057,7 @@ export default function Emprestimos() {
                 )}
                 {notas && <div><p className="text-xs text-muted-foreground">Notas</p><p className="text-sm">{notas}</p></div>}
               </div>
-              <p className="text-xs text-muted-foreground">Um PDF será gerado automaticamente após confirmar.</p>
+              <p className="text-xs text-muted-foreground">O Auto será gerado automaticamente após confirmar.</p>
               <div className="flex justify-end gap-3">
                 <Button variant="outline" onClick={() => setStep(1)}>Voltar</Button>
                 <Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending}>
@@ -1488,8 +1488,8 @@ export default function Emprestimos() {
               )}
               {importSummary && (
                 <Button variant="outline" onClick={() => gerarRelatorioImportacaoPDF(importSummary)} className="text-primary border-primary hover:bg-primary/10">
-                  <FileText className="w-4 h-4 mr-2" />
-                  Relatório (PDF)
+                  <Download className="w-4 h-4 mr-2" />
+                  Relatório de Importação
                 </Button>
               )}
             </div>

@@ -181,11 +181,11 @@ export const MANUAL_CONTENT = {
       - **Equipamentos / Armazém**: Listagem focada na localização física do material (Em armazém, Fora de armazém ou Desconhecido).
 
       ### Funcionalidades de Exportação:
-      - **Excel**: Gera um ficheiro formatado com cabeçalhos e colunas ajustadas.
-      - **PDF**: Documento profissional em formato paisagem (A4) pronto para impressão.
+      - **Word (DOCX)**: Documento oficial gerado a partir de templates, com todas as variáveis preenchidas.
+      - **Excel**: Listagem em formato folha de cálculo para análise de dados.
       
       ### Filtros e Ordenação:
-      - **IMPORTANTE**: O sistema exporta exatamente o que vê no ecrã. Se ordenar por "Nome" ou filtrar por "Pendentes", o PDF/Excel respeitará essa ordem e filtro.
+      - **IMPORTANTE**: O sistema exporta exatamente o que vê no ecrã. Se ordenar por "Nome" ou filtrar por "Pendentes", a exportação respeitará essa ordem e filtro.
       - Os filtros aplicados aparecem escritos no cabeçalho do documento exportado.
     `
   },

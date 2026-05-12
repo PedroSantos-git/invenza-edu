@@ -506,7 +506,7 @@ export default function Listas() {
                     onClick={() => exportToPDF(processedData, activeReport.id, activeReport.columns, activeReport.title, getAppliedFilters())}
                     disabled={!processedData.length}
                   >
-                    <FileText className="w-4 h-4 mr-2" /> PDF
+                    <FileText className="w-4 h-4 mr-2" /> Exportar Documento
                   </Button>
                 </>
               )}

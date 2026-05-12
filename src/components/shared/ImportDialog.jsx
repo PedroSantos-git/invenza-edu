@@ -832,7 +832,7 @@ export default function ImportDialog({ open, onClose, entityName, jsonSchema, qu
                 </p>
                 <div className="mt-4 flex gap-2">
                   <Button type="button" size="sm" variant="outline" onClick={exportDiscrepanciesExcel}>Exportar Excel</Button>
-                  <Button type="button" size="sm" variant="outline" onClick={exportDiscrepanciesPDF}>Exportar PDF</Button>
+                  <Button type="button" size="sm" variant="outline" onClick={exportDiscrepanciesPDF}>Exportar Lista</Button>
                 </div>
               </div>
               <div className="border rounded-lg overflow-hidden max-h-60 overflow-y-auto">

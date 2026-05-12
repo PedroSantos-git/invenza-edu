@@ -838,8 +838,8 @@ export default function Avarias() {
               onClick={() => gerarRelatorioImportacaoAvariasPDF(importSummary)}
               className="text-primary border-primary hover:bg-primary/10"
             >
-              <FileDown className="w-4 h-4 mr-2" />
-              Imprimir Relatório (PDF)
+              <Download className="w-4 h-4 mr-2" />
+              Imprimir Relatório
             </Button>
             <Button onClick={() => setImportSummary(null)}>Fechar Resumo</Button>
           </div>

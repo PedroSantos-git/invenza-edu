@@ -104,7 +104,7 @@ export default function RichTextEditor({
         <div className="bg-amber-50 border border-amber-200 p-3 rounded text-xs text-amber-800 mb-2">
           <strong>Editor de Templates:</strong><br/>
           1. Para a melhor experiência, <strong>edite o ficheiro DOCX no seu computador</strong> e carregue-o aqui.<br/>
-          2. O editor abaixo permite ajustes rápidos no <strong>HTML (usado para PDFs rápidos)</strong>.<br/>
+          2. O editor abaixo permite ajustes rápidos no <strong>HTML (usado para pré-visualização)</strong>.<br/>
           3. Se alterar o texto abaixo, o ficheiro DOCX original <strong>não será atualizado</strong> automaticamente.
         </div>
       )}
