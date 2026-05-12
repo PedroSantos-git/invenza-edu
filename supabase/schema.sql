@@ -126,6 +126,10 @@ create table if not exists public.pessoas (
   ee_telefone text,
   foto text,
   ativo boolean not null default true,
+  -- Docente-specific fields
+  grupo_recrutamento text,
+  qe text,
+  cc_numero text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

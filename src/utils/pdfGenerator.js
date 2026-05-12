@@ -190,11 +190,13 @@ ${pessoa?.ee_nome || '—'}, Encarregado de Educação, com o NIF ${pessoa?.ee_n
 `;
   } else {
     cabecalhoEntrega = `
-Auto de Entrega nº {{uuid}}
+Auto de Entrega: nº {{uuid}}
+
 
 No dia ${formatDataHora().split(' às ')[0]}, às ${formatDataHora().split(' às ')[1]}, na Escola Secundária D. João II, Setúbal, sita na R. Dr. Luís Macedo e Castro 2914-510 SETÚBAL procedeu-se à entrega temporária e gratuita dos bens e equipamentos informáticos, abaixo descritos a:
 
-${pessoa?.nome || '—'}, Docente, com o NIF ${pessoa?.nif || '—'}.
+
+${pessoa?.nome || '—'}, Docente, do grupo de recrutamento ${pessoa?.grupo_recrutamento || '—'}, do QE ${pessoa?.qe || '—'}, ${pessoa?.email || '—'}, a exercer funções letivas no Escola Secundária D. João II, Setúbal, e residente em ${pessoa?.morada || '—'}, com o NIF ${pessoa?.nif || '—'}, titular do Cartão de Cidadão n.º ${pessoa?.cc_numero || '—'}.
 `;
   }
   
@@ -225,6 +227,11 @@ ${pessoa?.nome || '—'}, Docente, com o NIF ${pessoa?.nif || '—'}.
     nif_docente: !isAluno ? pessoa?.nif : '—',
     cabecalho_entrega: cabecalhoEntrega,
     utilizador_atual: currentUser?.full_name || '—',
+    
+    // Docente-specific variables
+    docente_grupo_recrutamento: pessoa?.grupo_recrutamento || '—',
+    docente_qe: pessoa?.qe || '—',
+    docente_cc_numero: pessoa?.cc_numero || '—',
     
     // Equipment section variables
     equipamento_secoes: equipmentSections.map(s => s.content).join(''),
