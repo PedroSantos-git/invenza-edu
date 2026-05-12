@@ -166,7 +166,7 @@ export async function gerarPDFEmprestimoDiretoAluno(emprestimo, currentUser = nu
   }
   
   const doc = new jsPDF();
-  let y = 20;
+  let y = 15;
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const marginLeft = 15;
@@ -175,7 +175,7 @@ export async function gerarPDFEmprestimoDiretoAluno(emprestimo, currentUser = nu
   
   // Helper function to add text with wrap
   function addText(text, size = 12, isBold = false, indent = 0, isUnderlined = false) {
-    if (y > pageHeight - 60) {
+    if (y > pageHeight - 100) {
       doc.addPage();
       y = 20;
     }
@@ -193,6 +193,14 @@ export async function gerarPDFEmprestimoDiretoAluno(emprestimo, currentUser = nu
     
     y += (lines.length * (size / 2.5)) + 3;
   }
+  
+  // TODO: Add República Portuguesa logo at top left
+  // doc.addImage('/assets/logo-republica-portuguesa.png', 'PNG', marginLeft, y, 40, 20);
+  // y += 30;
+  
+  // TODO: Add Auto de Entrega header image
+  // doc.addImage('/assets/auto-de-entrega-header.png', 'PNG', marginLeft, y, contentWidth, 80);
+  // y += 90;
   
   // Title
   addText(`Auto de entrega nº ${emprestimo.id}`, 16, true);
@@ -319,14 +327,19 @@ export async function gerarPDFEmprestimoDiretoAluno(emprestimo, currentUser = nu
   doc.text(eeText, marginLeft + pageWidth / 2 + 90 - eeWidth / 2, y);
   y += 30;
   
-  // Add footer logos (placeholder for now - you can add actual images later)
-  if (y > pageHeight - 80) {
+  // Add footer logos (apoios) on the last page
+  if (y > pageHeight - 120) {
     doc.addPage();
     y = 20;
   }
+  
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
   doc.text('Apoios:', pageWidth / 2, y, { align: 'center' });
+  y += 15;
+  
+  // TODO: Add apoios logos
+  // doc.addImage('/assets/apoios-logos.png', 'PNG', marginLeft, y, contentWidth, 60);
   
   // Add footer
   const totalPages = doc.internal.getNumberOfPages();
