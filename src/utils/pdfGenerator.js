@@ -98,7 +98,9 @@ viii. \t Está vedada a realização de comunicações em roaming fora da UE.
  * Main export function: Prioritizes DOCX substitution, falls back to HTML-to-PDF
  */
 async function exportDocument(title, template, vars) {
-  // Generate barcodes if missing but text exists
+  // Map barcodes if they are base64 images
+  const docxData = { ...vars };
+  
   if (vars.numero_serie && !vars.barcode_serie) {
     vars.barcode_serie = await DocxProcessor.generateBarcode(vars.numero_serie);
   }
@@ -106,10 +108,14 @@ async function exportDocument(title, template, vars) {
     vars.barcode_imobilizado = await DocxProcessor.generateBarcode(vars.numero_imobilizado);
   }
 
+  // Ensure barcode variables are available for DOCX without the % prefix in the data object
+  if (vars.barcode_serie) docxData.barcode_serie = vars.barcode_serie;
+  if (vars.barcode_imobilizado) docxData.barcode_imobilizado = vars.barcode_imobilizado;
+
   if (template?.file_base64) {
     try {
       // 1. Generate filled DOCX
-      const docxBlob = await DocxProcessor.generateDocx(template.file_base64, vars);
+      const docxBlob = await DocxProcessor.generateDocx(template.file_base64, docxData);
       
       // 2. Offer DOCX download
       saveAs(docxBlob, `${title.replace(/\s+/g, '_')}.docx`);
@@ -122,6 +128,7 @@ async function exportDocument(title, template, vars) {
       return;
     } catch (err) {
       console.error('DOCX Export failed, falling back to PDF:', err);
+      toast.error('Erro ao gerar DOCX. A tentar PDF...');
     }
   }
 
@@ -129,6 +136,8 @@ async function exportDocument(title, template, vars) {
   if (template?.conteudo) {
     const filledHtml = fillHtmlVariables(template.conteudo, vars);
     await DocxProcessor.htmlToPdf(filledHtml, `${title.replace(/\s+/g, '_')}.pdf`);
+  } else {
+    toast.error('Template sem conteúdo para gerar PDF.');
   }
 }
 
@@ -141,7 +150,9 @@ function fillHtmlVariables(html, vars) {
       if (typeof value === 'string' && value.startsWith('BOLD:')) {
         displayValue = `<strong>${value.replace('BOLD:', '')}</strong>`;
       }
+      // Suportar ambos os delimitadores no HTML
       content = content.replace(new RegExp(`{{${key}}}`, 'g'), displayValue ?? '—');
+      content = content.replace(new RegExp(`\\[\\[${key}\\]\\]`, 'g'), displayValue ?? '—');
     }
   });
   return content;

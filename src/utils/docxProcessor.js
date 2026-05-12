@@ -77,10 +77,17 @@ export const DocxProcessor = {
         paragraphLoop: true,
         linebreaks: true,
         modules: [imageModule],
+        delimiters: {
+          start: '[[',
+          end: ']]'
+        },
         parser: (tag) => {
           return {
             get(scope) {
-              let value = scope[tag];
+              // Se a tag começar por %, tratamos como imagem/barcode (opcional no parser, o ImageModule trata)
+              const cleanTag = tag.startsWith('%') ? tag.substring(1) : tag;
+              let value = scope[cleanTag] || scope[tag];
+              
               if (typeof value === 'string' && value.startsWith('BOLD:')) {
                 return value.replace('BOLD:', '');
               }
@@ -89,6 +96,10 @@ export const DocxProcessor = {
           };
         }
       });
+
+      // Se os dados contiverem as tags antigas {{...}}, vamos mapear para [[...]]
+      // ou apenas garantir que o parser lida com o que recebe.
+      // No entanto, a melhor solução é mudar o delimitador para evitar o conflito do XML.
 
       doc.render(data);
 
@@ -214,18 +225,18 @@ export const DocxProcessor = {
   },
   
   async generateDefaultStudentLoanTemplate() {
-    // Default template text with all placeholders
+    // Default template text with all placeholders using new delimiters [[ ]]
     const paragraphs = [
       new Paragraph({
         children: [
           new TextRun({ text: "Auto de entrega nº ", bold: true, size: 28 }),
-          new TextRun({ text: "{{uuid}}", size: 28 })
+          new TextRun({ text: "[[uuid]]", size: 28 })
         ],
         spacing: { after: 200 }
       }),
-      new Paragraph({ children: [new TextRun("{{cabecalho_entrega}}")], spacing: { after: 200 } }),
+      new Paragraph({ children: [new TextRun("[[cabecalho_entrega]]")], spacing: { after: 200 } }),
       new Paragraph({ children: [new TextRun("São cedidos a título gratuito, com a obrigação de restituição, os seguintes equipamentos:")], spacing: { after: 200 } }),
-      new Paragraph({ children: [new TextRun("{{equipamento_secoes}}")], spacing: { after: 400 } }),
+      new Paragraph({ children: [new TextRun("[[equipamento_secoes]]")], spacing: { after: 400 } }),
       new Paragraph({ children: [new TextRun({ text: "CONDIÇÕES GERAIS", bold: true, size: 24 })], spacing: { after: 200 } }),
       new Paragraph({ children: [new TextRun("1.\tOs equipamentos cedidos destinam-se a ser utilizados, exclusivamente, para fins do processo de ensino e aprendizagem do Aluno, com início em 04/5/2026 e término na data de conclusão do ciclo de estudos que o Aluno frequenta no momento da cedência, nomeadamente, nas seguintes situações:")], spacing: { after: 200 } }),
       new Paragraph({ children: [new TextRun("\ta.\tQuando os alunos tenham completado o ciclo ou nível de ensino a que se destinam os equipamentos a fornecer ou a escolaridade obrigatória (no final do 4º, 9º ou 12º ano);")], spacing: { after: 100 } }),
@@ -247,7 +258,7 @@ export const DocxProcessor = {
       new Paragraph({ children: [new TextRun("13.\tO tratamento de dados pessoais é realizado no âmbito da Medida «Universalização da Escola Digital», com base na gestão da relação contratual, para efeitos de gestão da entrega dos equipamentos informáticos, de acordo com os termos e condições da Política de Proteção de Dados acessível em https://registoequipamento.escoladigital.min-educ.pt.")], spacing: { after: 200 } }),
       new Paragraph({ children: [new TextRun("14.\tO Encarregado de Educação, sendo titular dos dados pessoais constantes do presente auto de entrega de bens ou equipamentos informáticos autoriza expressamente a que os mesmos sejam objeto de recolha, utilização, registo e tratamento, ao abrigo da alínea a) do n.º1 do art.6.º do Regulamento Geral sobre Proteção de Dados (RGPD), para efeitos de monitorização, verificação, controlo e avaliação no quadro da implementação dos Fundos Europeus Estruturais e de Investimento (FEEI) e respetivo reporte à Comissão Europeia e restantes entidades envolvidas, no âmbito dos respetivos projetos comunitários financiadores e sempre que solicitado pelas autoridades nacionais e comunitárias legalmente competentes, no âmbito das quais também podem ser solicitados comprovativos de matrícula e da condição")], spacing: { after: 100 } }),
       new Paragraph({ children: [new TextRun("\tde beneficiário do escalão de Ação Social Escolar identificado no proémio pelas mesmas autoridades")], spacing: { after: 200 } }),
-      new Paragraph({ children: [new TextRun("SIM, ACEITO que os meus dados pessoais e, se aplicável, os do meu educando, sejam objeto de recolha, utilização, registo e tratamento, para os efeitos indicados no presente documento")], spacing: { after: 200 } }),
+      new Paragraph({ children: [new TextRun("SIM, ACEITO que os meus dados pessoais e, se aplicável, os do meu educando, sejam objeto de recolha, utilização, registo e tratamento, para los efeitos indicados no presente documento")], spacing: { after: 200 } }),
       new Paragraph({ children: [new TextRun("15.\tO Encarregado de Educação/Aluno, enquanto titular dos dados pessoais, está consciente de que pode solicitar informações, apresentar reclamações, comunicar incidentes ou exercer direitos de proteção de dados, designadamente e entre outros, os direitos de acesso, retificação, oposição ou limitação do tratamento, portabilidade, apagamento ou retirada do consentimento, através de contacto com o Encarregado da Proteção de Dados do Agrupamento de Escola ou Escola não Agrupada, cujos contactos estão disponíveis na respetiva Política de Proteção de Dados.")], spacing: { after: 600 } }),
       new Paragraph({ children: [new TextRun("Entregue por:")], spacing: { after: 200 } }),
       new Paragraph({ children: [new TextRun("")], spacing: { after: 200 } }),
@@ -258,9 +269,9 @@ export const DocxProcessor = {
       new Paragraph({ children: [new TextRun("")], spacing: { after: 400 } }),
       new Paragraph({
         children: [
-          new TextRun({ text: "{{utilizador_atual}}", bold: true }),
+          new TextRun({ text: "[[utilizador_atual]]", bold: true }),
           new TextRun("\t\t"),
-          new TextRun({ text: "{{ee_nome}}", bold: true })
+          new TextRun({ text: "[[ee_nome]]", bold: true })
         ],
         alignment: "center"
       })
