@@ -23,7 +23,7 @@ import RichTextEditor from '@/components/shared/RichTextEditor';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
-import { gerarPDFEmprestimo, gerarRelatorioImportacaoPDF } from '@/utils/pdfGenerator';
+import { gerarPDFEmprestimo, gerarRelatorioImportacaoPDF, gerarPDFEmprestimoDiretoAluno } from '@/utils/pdfGenerator';
 import { useAuth } from '@/lib/AuthContext';
 import mammoth from 'mammoth';
 import JSZip from 'jszip';
@@ -1212,8 +1212,16 @@ export default function Emprestimos() {
                   Editar Detalhes
                 </Button>
                 <Button variant="outline" size="sm" onClick={() => { gerarPDFEmprestimo(detailItem, pdfTemplates, user); }}>
-                  <FileDown className="w-4 h-4 mr-1" />PDF
+                  <FileDown className="w-4 h-4 mr-1" />PDF (Template)
                 </Button>
+                {(() => {
+                  const pessoa = pessoas.find(p => p.id === detailItem.pessoa_id);
+                  return pessoa?.tipo === 'Aluno' && (
+                    <Button size="sm" onClick={() => { gerarPDFEmprestimoDiretoAluno(detailItem, user); }}>
+                      <FileDown className="w-4 h-4 mr-1" />PDF Direto
+                    </Button>
+                  );
+                })()}
               </div>
             </div>
           </DialogContent>

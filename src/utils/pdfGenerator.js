@@ -147,6 +147,172 @@ function fillHtmlVariables(html, vars) {
   return content;
 }
 
+export async function gerarPDFEmprestimoDiretoAluno(emprestimo, currentUser = null) {
+  // Fetch full data
+  const pessoa = await db.entities.Pessoa.get(emprestimo.pessoa_id);
+  const eq = await db.entities.Equipamento.get(emprestimo.equipamento_id);
+  
+  // Fetch all kit items
+  let kitItems = [eq];
+  if (eq?.numero_imobilizado?.trim()) {
+    const { data: siblings } = await db.client
+      .from('equipamentos')
+      .select('*')
+      .eq('numero_imobilizado', eq.numero_imobilizado.trim())
+      .neq('id', eq.id);
+    if (siblings && siblings.length > 0) {
+      kitItems = [eq, ...siblings];
+    }
+  }
+  
+  const doc = new jsPDF();
+  let y = 20;
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const marginLeft = 15;
+  const marginRight = 15;
+  const contentWidth = pageWidth - marginLeft - marginRight;
+  
+  // Helper function to add text with wrap
+  function addText(text, size = 12, isBold = false, indent = 0) {
+    if (y > pageHeight - 30) {
+      doc.addPage();
+      y = 20;
+    }
+    
+    doc.setFontSize(size);
+    doc.setFont('helvetica', isBold ? 'bold' : 'normal');
+    
+    const lines = doc.splitTextToSize(text, contentWidth - indent);
+    doc.text(lines, marginLeft + indent, y);
+    
+    y += (lines.length * (size / 2.5)) + 3;
+  }
+  
+  // Title
+  addText(`Auto de entrega nº ${emprestimo.id}`, 16, true);
+  y += 5;
+  
+  // Header
+  const dataHora = formatDataHora();
+  const headerText = `No dia ${dataHora.split(' às ')[0]}, às ${dataHora.split(' às ')[1]}, na Escola Secundária D. João II, Setúbal, sita na R. Dr. Luís Macedo e Castro 2914-510 SETÚBAL procedeu-se à entrega temporária e gratuita dos bens e equipamentos informáticos, abaixo descritos a:`;
+  addText(headerText);
+  y += 5;
+  
+  // Person info
+  const pessoaText = `${pessoa?.ee_nome || '—'}, Encarregado de Educação, com o NIF ${pessoa?.ee_nif || '—'}, do aluno ${pessoa?.nome || '—'}, nº de processo ${pessoa?.n_processo || '—'} matriculado na Escola Secundária D. João II, Setúbal, a frequentar o ${pessoa?.turma || '—'} ano, com o NIF ${pessoa?.nif || '—'}.`;
+  addText(pessoaText);
+  y += 10;
+  
+  // Equipment intro
+  addText('São cedidos a título gratuito, com a obrigação de restituição, os seguintes equipamentos:');
+  y += 5;
+  
+  // Equipment sections
+  const equipmentSections = generateEquipmentSections(kitItems);
+  equipmentSections.forEach(section => {
+    // Split content by lines and add each line
+    const lines = section.content.split('\n').filter(l => l.trim());
+    lines.forEach(line => {
+      // Calculate indentation based on leading tabs
+      let indent = 0;
+      let cleanLine = line;
+      while (cleanLine.startsWith('\t')) {
+        indent += 10;
+        cleanLine = cleanLine.substring(1);
+      }
+      addText(cleanLine, 11, false, indent);
+    });
+    y += 5;
+  });
+  
+  // General conditions
+  addText('CONDIÇÕES GERAIS', 14, true);
+  y += 5;
+  
+  const condicoes = [
+    '1.\tOs equipamentos cedidos destinam-se a ser utilizados, exclusivamente, para fins do processo de ensino e aprendizagem do Aluno, com início em 04/5/2026 e término na data de conclusão do ciclo de estudos que o Aluno frequenta no momento da cedência, nomeadamente, nas seguintes situações:',
+    '\ta.\tQuando os alunos tenham completado o ciclo ou nível de ensino a que se destinam os equipamentos a fornecer ou a escolaridade obrigatória (no final do 4º, 9º ou 12º ano);',
+    '\tb.\tNas situações de transferências de alunos para outro AE/EnA distinto do 2.º outorgante;',
+    '\tc.\tEm caso de aplicação de medidas disciplinares sancionatórias ao aluno que determinem a «transferência de escola» ou a «expulsão da escola», previstas, respetivamente, nas alíneas d) e e) do n.º 2 do artigo 28.º do Estatuto do Aluno e Ética Escolar, aprovado pela Lei n.º 51/2012, de 5 de setembro, na sua redação atual;',
+    '\td.\tCom a saída do aluno do Ensino Público.',
+    '2.\tNos casos previstos no número 1., a devolução dos equipamentos informáticos, conetividade e serviços conexos pelo EE ou pelo aluno deve ocorrer através da entrega dos mesmos nas instalações da sede do AE/EnA no prazo máximo de uma semana, após a verificação dos factos aí descritos;',
+    '3.\tCaso a entrega dos equipamentos não tenha lugar no prazo previsto no n.º anterior, o/a Encarregado/a de Educação/Aluno/a (comodatário/a) será notificado/a pelo na Escola Secundária D. João II, Setúbal, para a entrega dos equipamentos no término do período previsto no n.º 1, para os contactos indicados pelo/a EE, para esta finalidade, ou na falta, para a sua morada;',
+    '4.\tO equipamento informático deve ser entregue limpo de ficheiros pessoais dos seus utilizadores e subcessionários;',
+    '5.\tO Encarregado de Educação subcessionário obriga-se a zelar pela conservação dos bens e equipamentos que lhe são cedidos por comodato (empréstimo), devendo restituí-los no fim do período indicado nos pontos anteriores nas condições que resultam de um uso responsável e prudente, sob pena do acionamento de obrigações contratualmente previstas por perda ou deterioração dos bens e equipamentos;',
+    '6.\tA instalação de programas ou aplicações informáticas (software) no equipamento cedido, deve ser feita exclusivamente para fins do processo de ensino e aprendizagem;',
+    '7.\tA instalação ou remoção de partes ou componentes (hardware) do equipamento é expressamente proibida;',
+    '8.\tO Encarregado de Educação/Aluno está autorizado a deslocar os equipamentos para fora da morada da sua residência ou domicílio indicada neste auto de entrega, exclusivamente para fins relacionados com o processo de ensino e aprendizagem e bem assim nas situações em que sejam previamente autorizados pelo Ministério da Educação ou pelo/a Diretor(a) do AE/EnA;',
+    '9.\tO Encarregado de Educação subcessionário obriga-se a comunicar imediatamente ao Escola Secundária D. João II, Setúbal a perda ou o roubo dos bens ou equipamentos;',
+    '10.\tO Encarregado de Educação subcessionário obriga-se, ainda, a suportar todas as despesas devidas pela recuperação dos bens ou equipamentos sempre que os danos advenham de mau uso ou negligência na sua conservação;',
+    '11.\tÉ vedada ao Encarregado de Educação subcessionário a possibilidade de sub-comodatar ou locar os bens ou equipamentos objeto cedido a terceiros;',
+    '12.\tEm tudo o que não consta nos pontos anteriores, são aplicáveis à presente cedência de equipamentos para o acesso e a utilização de recursos didáticos e educativos digitais, as disposições constantes dos artigos 1129.º a 1137.º do Código Civil, relativas ao contrato de comodato.'
+  ];
+  condicoes.forEach(cond => {
+    let indent = 0;
+    let cleanLine = cond;
+    while (cleanLine.startsWith('\t')) {
+      indent += 10;
+      cleanLine = cleanLine.substring(1);
+    }
+    addText(cleanLine, 11, false, indent);
+  });
+  y += 10;
+  
+  // Data protection section
+  addText('TRATAMENTO DE DADOS PESSOAIS, DECLARAÇÃO DE CONSENTIMENTO E EXERCÍCIO DE DIREITOS', 14, true);
+  y += 5;
+  
+  const dpText = [
+    '13.\tO tratamento de dados pessoais é realizado no âmbito da Medida «Universalização da Escola Digital», com base na gestão da relação contratual, para efeitos de gestão da entrega dos equipamentos informáticos, de acordo com os termos e condições da Política de Proteção de Dados acessível em https://registoequipamento.escoladigital.min-educ.pt.',
+    '14.\tO Encarregado de Educação, sendo titular dos dados pessoais constantes do presente auto de entrega de bens ou equipamentos informáticos autoriza expressamente a que os mesmos sejam objeto de recolha, utilização, registo e tratamento, ao abrigo da alínea a) do n.º1 do art.6.º do Regulamento Geral sobre Proteção de Dados (RGPD), para efeitos de monitorização, verificação, controlo e avaliação no quadro da implementação dos Fundos Europeus Estruturais e de Investimento (FEEI) e respetivo reporte à Comissão Europeia e restantes entidades envolvidas, no âmbito dos respetivos projetos comunitários financiadores e sempre que solicitado pelas autoridades nacionais e comunitárias legalmente competentes, no âmbito das quais também podem ser solicitados comprovativos de matrícula e da condição',
+    '\tde beneficiário do escalão de Ação Social Escolar identificado no proémio pelas mesmas autoridades',
+    'SIM, ACEITO que os meus dados pessoais e, se aplicável, os do meu educando, sejam objeto de recolha, utilização, registo e tratamento, para os efeitos indicados no presente documento',
+    '15.\tO Encarregado de Educação/Aluno, enquanto titular dos dados pessoais, está consciente de que pode solicitar informações, apresentar reclamações, comunicar incidentes ou exercer direitos de proteção de dados, designadamente e entre outros, os direitos de acesso, retificação, oposição ou limitação do tratamento, portabilidade, apagamento ou retirada do consentimento, através de contacto com o Encarregado da Proteção de Dados do Agrupamento de Escola ou Escola não Agrupada, cujos contactos estão disponíveis na respetiva Política de Proteção de Dados.'
+  ];
+  dpText.forEach(text => {
+    let indent = 0;
+    let cleanLine = text;
+    while (cleanLine.startsWith('\t')) {
+      indent += 10;
+      cleanLine = cleanLine.substring(1);
+    }
+    addText(cleanLine, 11, false, indent);
+  });
+  y += 20;
+  
+  // Signature section
+  addText('Entregue por:', 12, false);
+  y += 20;
+  addText('Cargo/categoria:', 12, false);
+  y += 30;
+  addText('Assinatura do responsável pela entrega dos equipamentos:', 12, false);
+  y += 30;
+  addText('Encarregado de Educação do Aluno:', 12, false);
+  y += 40;
+  
+  // Signatures
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  const userText = currentUser?.full_name || '—';
+  const eeText = pessoa?.ee_nome || '—';
+  const userWidth = doc.getTextWidth(userText);
+  const eeWidth = doc.getTextWidth(eeText);
+  doc.text(userText, pageWidth / 4 - userWidth / 2, y);
+  doc.text(eeText, (pageWidth * 3) / 4 - eeWidth / 2, y);
+  
+  // Add footer
+  const totalPages = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Página ${i} de ${totalPages}`, pageWidth - marginRight, pageHeight - 10, { align: 'right' });
+  }
+  
+  doc.save(`Auto_Entrega_Aluno_${emprestimo.id}.pdf`);
+}
+
 export async function gerarPDFEmprestimo(emprestimo, templates = [], currentUser = null) {
   // Fetch full data if needed
   const pessoa = await db.entities.Pessoa.get(emprestimo.pessoa_id);
