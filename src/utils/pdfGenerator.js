@@ -106,53 +106,63 @@ viii. \t Está vedada a realização de comunicações em roaming fora da UE.
  */
 export async function exportDocument(title, template, vars = {}, format = null) {
   if (!vars) vars = {};
-  // Map barcodes if they are base64 images
-  const docxData = { ...vars };
   
-  if (vars.numero_serie && !vars.barcode_serie) {
-    try {
-      vars.barcode_serie = await DocxProcessor.generateBarcode(vars.numero_serie);
-    } catch (e) { console.error('Barcode error:', e); }
-  }
-  if (vars.numero_imobilizado && !vars.barcode_imobilizado) {
-    try {
-      vars.barcode_imobilizado = await DocxProcessor.generateBarcode(vars.numero_imobilizado);
-    } catch (e) { console.error('Barcode error:', e); }
-  }
-
-  // Ensure barcode variables are available for DOCX without the % prefix in the data object
-  if (vars.barcode_serie) docxData.barcode_serie = vars.barcode_serie;
-  if (vars.barcode_imobilizado) docxData.barcode_imobilizado = vars.barcode_imobilizado;
-
-  if (template?.file_base64 && (format === 'docx' || !format)) {
-    try {
-      // 1. Generate filled DOCX
-      const docxBlob = await DocxProcessor.generateDocx(template.file_base64, docxData);
+  return toast.promise(
+    (async () => {
+      // Map barcodes if they are base64 images
+      const docxData = { ...vars };
       
-      // 2. Offer DOCX download
-      saveAs(docxBlob, `${title.replace(/\s+/g, '_')}.docx`);
-      
-      // If a specific format was requested and it was docx, we're done
-      if (format === 'docx') return;
-    } catch (err) {
-      console.error('DOCX Export failed:', err);
-      toast.error('Erro ao gerar DOCX.');
-    }
-  }
+      if (vars.numero_serie && !vars.barcode_serie) {
+        try {
+          vars.barcode_serie = await DocxProcessor.generateBarcode(vars.numero_serie);
+        } catch (e) { console.error('Barcode error:', e); }
+      }
+      if (vars.numero_imobilizado && !vars.barcode_imobilizado) {
+        try {
+          vars.barcode_imobilizado = await DocxProcessor.generateBarcode(vars.numero_imobilizado);
+        } catch (e) { console.error('Barcode error:', e); }
+      }
 
-  // PDF Generation (either requested specifically, or as fallback, or as part of both)
-  if (template?.conteudo && (format === 'pdf' || !format)) {
-    try {
-      const filledHtml = fillHtmlVariables(template.conteudo, vars);
-      // Wait for the promise to ensure the process finishes
-      await DocxProcessor.htmlToPdf(filledHtml, `${title.replace(/\s+/g, '_')}.pdf`);
-    } catch (err) {
-      console.error('PDF Export failed:', err);
-      toast.error('Erro ao gerar PDF.');
+      // Ensure barcode variables are available for DOCX without the % prefix in the data object
+      if (vars.barcode_serie) docxData.barcode_serie = vars.barcode_serie;
+      if (vars.barcode_imobilizado) docxData.barcode_imobilizado = vars.barcode_imobilizado;
+
+      if (template?.file_base64 && (format === 'docx' || !format)) {
+        try {
+          // 1. Generate filled DOCX
+          const docxBlob = await DocxProcessor.generateDocx(template.file_base64, docxData);
+          
+          // 2. Offer DOCX download
+          saveAs(docxBlob, `${title.replace(/\s+/g, '_')}.docx`);
+          
+          // If a specific format was requested and it was docx, we're done
+          if (format === 'docx') return;
+        } catch (err) {
+          console.error('DOCX Export failed:', err);
+          throw new Error('Falha ao gerar DOCX: ' + (err.message || 'Erro desconhecido'));
+        }
+      }
+
+      // PDF Generation (either requested specifically, or as fallback, or as part of both)
+      if (template?.conteudo && (format === 'pdf' || !format)) {
+        try {
+          const filledHtml = fillHtmlVariables(template.conteudo, vars);
+          // Wait for the promise to ensure the process finishes
+          await DocxProcessor.htmlToPdf(filledHtml, `${title.replace(/\s+/g, '_')}.pdf`);
+        } catch (err) {
+          console.error('PDF Export failed:', err);
+          throw new Error('Falha ao gerar PDF: ' + (err.message || 'Erro desconhecido'));
+        }
+      } else if (!template?.conteudo && format === 'pdf') {
+        throw new Error('Template sem conteúdo HTML para gerar PDF.');
+      }
+    })(),
+    {
+      loading: `A gerar documento (${format?.toUpperCase() || 'PDF/DOCX'})...`,
+      success: 'Documento gerado com sucesso!',
+      error: (err) => err.message || 'Erro ao gerar documento'
     }
-  } else if (!template?.conteudo && format === 'pdf') {
-    toast.error('Template sem conteúdo HTML para gerar PDF.');
-  }
+  );
 }
 
 function fillHtmlVariables(html, vars) {

@@ -93,33 +93,29 @@ export const DocxProcessor = {
             get(scope) {
               if (!scope || typeof scope !== 'object') return '';
               
-              // Se a tag começar por %, o docxtemplater-image-module trata-a, 
-              // mas o parser precisa devolver o valor original (a base64) para o ImageModule usar
               const isImageTag = tag.startsWith('%');
               const cleanTag = isImageTag ? tag.substring(1) : tag;
               
-              // Tentar obter o valor da variável de forma segura
-              let value = null;
+              let value = '';
               try {
-                value = scope[cleanTag];
-                if (value === undefined || value === null) {
-                  value = scope[tag];
-                }
+                // Try both with and without the prefix
+                value = scope[cleanTag] ?? scope[tag] ?? '';
               } catch (e) {
-                console.warn(`Error accessing tag ${tag} in scope:`, e);
+                console.warn(`Error accessing tag ${tag}:`, e);
                 value = '';
               }
               
-              // Se ainda for nulo/indefinido, devolvemos string vazia (exceto para imagens, onde devolvemos null para o módulo ignorar)
-              if (value === undefined || value === null) {
-                return isImageTag ? null : '';
+              // If it's an image tag and we have no value, return a placeholder or empty string
+              // Returning an empty string instead of null to avoid "null is not an object" errors in some modules
+              if (isImageTag && (!value || value === '—')) {
+                return ''; 
               }
               
               if (typeof value === 'string' && value.startsWith('BOLD:')) {
                 return value.replace('BOLD:', '');
               }
               
-              return value;
+              return value ?? '';
             }
           };
         }
@@ -129,7 +125,21 @@ export const DocxProcessor = {
       // ou apenas garantir que o parser lida com o que recebe.
       // No entanto, a melhor solução é mudar o delimitador para evitar o conflito do XML.
 
-      doc.render(data);
+      // Use try-catch for the render process
+      try {
+        doc.render(data || {});
+      } catch (error) {
+        // Docxtemplater throws a rich error object
+        console.error('Docxtemplater render error:', error);
+        
+        if (error.properties && error.properties.errors instanceof Array) {
+          const errorMessages = error.properties.errors
+            .map(err => err.properties?.explanation || err.message)
+            .join(' | ');
+          throw new Error(`Erro no template: ${errorMessages}`);
+        }
+        throw error;
+      }
 
       const out = doc.getZip().generate({
         type: "blob",
@@ -138,7 +148,7 @@ export const DocxProcessor = {
 
       return out;
     } catch (error) {
-      console.error('Error generating DOCX:', error);
+      console.error('Error in generateDocx:', error);
       throw error;
     }
   },
@@ -168,32 +178,47 @@ export const DocxProcessor = {
    * Converts HTML to PDF using a hidden container (professional quality)
    */
   async htmlToPdf(htmlContent, filename) {
+    console.log('Starting PDF generation for:', filename);
     const container = document.createElement('div');
+    container.className = 'pdf-export-container';
     container.style.width = '210mm';
+    container.style.minHeight = '297mm';
     container.style.padding = '20mm';
-    container.style.position = 'absolute';
-    container.style.left = '-9999px';
+    container.style.position = 'fixed';
+    container.style.left = '0';
     container.style.top = '0';
+    container.style.zIndex = '-9999';
     container.style.backgroundColor = 'white';
+    container.style.color = 'black';
+    container.style.visibility = 'hidden';
     container.innerHTML = htmlContent;
     document.body.appendChild(container);
 
     try {
-      const canvas = await html2canvas(container, { scale: 2 });
+      // Wait a bit for any internal images or styles to settle
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      console.log('Capturing canvas...');
+      const canvas = await html2canvas(container, { 
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        logging: true,
+        backgroundColor: '#ffffff'
+      });
+      
+      console.log('Canvas captured, creating PDF...');
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
       
       const imgProps = pdf.getImageProperties(imgData);
       const imgWidth = pdfWidth;
       const imgHeight = (imgProps.height * imgWidth) / imgProps.width;
       
-      // If content is taller than one page, we might need multiple pages
-      // For now, let's just add it to one page. If you need multi-page, 
-      // html2pdf-jspdf logic would be better.
       pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
       pdf.save(filename || 'documento.pdf');
+      console.log('PDF saved successfully');
     } catch (err) {
       console.error('Error in htmlToPdf:', err);
       throw err;
