@@ -505,7 +505,7 @@ export default function Devolucoes() {
                   <TableCell className="hidden sm:table-cell text-sm">{format(new Date(d.data_devolucao), 'dd/MM/yyyy')}</TableCell>
                   <TableCell><StatusBadge status={d.estado_equipamento} /></TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="icon" onClick={e => { e.stopPropagation(); gerarPDFDevolucao(d, pdfTemplates, user); }}><FileDown className="w-4 h-4" /></Button>
+                    <Button variant="ghost" size="icon" title="Exportar Auto (Word)" onClick={e => { e.stopPropagation(); gerarPDFDevolucao(d, pdfTemplates, user); }}><FileDown className="w-4 h-4" /></Button>
                   </TableCell>
                 </TableRow>
               ))
@@ -797,7 +797,7 @@ export default function Devolucoes() {
                   Editar Devolução
                 </Button>
                 <Button variant="outline" size="sm" onClick={() => { gerarPDFDevolucao(detailItem, pdfTemplates, user); }}>
-                  <FileDown className="w-4 h-4 mr-1" />PDF
+                  <FileDown className="w-4 h-4 mr-1" />Exportar Auto (Word)
                 </Button>
               </div>
             </div>

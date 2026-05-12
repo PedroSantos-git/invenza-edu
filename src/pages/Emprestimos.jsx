@@ -906,7 +906,7 @@ export default function Emprestimos() {
                           <Mail className="w-4 h-4 text-primary" />
                         </Button>
                       )}
-                      <Button variant="ghost" size="icon" title="PDF" onClick={e => handlePDF(emp, e)}><FileDown className="w-4 h-4" /></Button>
+                      <Button variant="ghost" size="icon" title="Exportar Auto (Word)" onClick={e => handlePDF(emp, e)}><FileDown className="w-4 h-4" /></Button>
                     </div>
                   </TableCell>
                 </TableRow>
