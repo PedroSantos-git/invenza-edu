@@ -178,6 +178,26 @@ export async function gerarPDFEmprestimo(emprestimo, templates = []) {
   const templateType = isAluno ? 'EMPRESTIMO_ALUNO' : 'EMPRESTIMO_DOCENTE';
   const template = templates.find(t => t.tipo === templateType && t.ativo !== false) || templates.find(t => t.tipo === 'EMPRESTIMO');
 
+  // Generate header section
+  let cabecalhoEntrega = '';
+  if (isAluno) {
+    cabecalhoEntrega = `
+Auto de Entrega nº {{uuid}}
+
+No dia ${formatDataHora().split(' às ')[0]}, às ${formatDataHora().split(' às ')[1]}, na Escola Secundária D. João II, Setúbal, sita na R. Dr. Luís Macedo e Castro 2914-510 SETÚBAL procedeu-se à entrega temporária e gratuita dos bens e equipamentos informáticos, abaixo descritos a:
+
+${pessoa?.ee_nome || '—'}, Encarregado de Educação, com o NIF ${pessoa?.ee_nif || '—'}, do aluno ${pessoa?.nome || '—'}, nº de processo ${pessoa?.n_processo || '—'} matriculado na Escola Secundária D. João II, Setúbal, a frequentar o ${pessoa?.turma || '—'} ano, com o NIF ${pessoa?.nif || '—'}.
+`;
+  } else {
+    cabecalhoEntrega = `
+Auto de Entrega nº {{uuid}}
+
+No dia ${formatDataHora().split(' às ')[0]}, às ${formatDataHora().split(' às ')[1]}, na Escola Secundária D. João II, Setúbal, sita na R. Dr. Luís Macedo e Castro 2914-510 SETÚBAL procedeu-se à entrega temporária e gratuita dos bens e equipamentos informáticos, abaixo descritos a:
+
+${pessoa?.nome || '—'}, Docente, com o NIF ${pessoa?.nif || '—'}.
+`;
+  }
+  
   const vars = {
     equipamento: eq?.designacao || emprestimo.equipamento_info || '—',
     pessoa: pessoa?.nome || emprestimo.pessoa_info || '—',
@@ -203,6 +223,7 @@ export async function gerarPDFEmprestimo(emprestimo, templates = []) {
     turma_aluno: isAluno ? pessoa?.turma : '—',
     nome_docente: !isAluno ? pessoa?.nome : '—',
     nif_docente: !isAluno ? pessoa?.nif : '—',
+    cabecalho_entrega: cabecalhoEntrega,
     
     // Equipment section variables
     equipamento_secoes: equipmentSections.map(s => s.content).join(''),
