@@ -23,7 +23,7 @@ import RichTextEditor from '@/components/shared/RichTextEditor';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
-import { gerarPDFEmprestimo, gerarRelatorioImportacaoPDF, gerarPDFEmprestimoDiretoAluno } from '@/utils/pdfGenerator';
+import { gerarPDFEmprestimo, gerarRelatorioImportacaoPDF, gerarPDFEmprestimoDiretoAluno, exportDocument } from '@/utils/pdfGenerator';
 import { useAuth } from '@/lib/AuthContext';
 import mammoth from 'mammoth';
 import JSZip from 'jszip';
@@ -188,6 +188,8 @@ export default function Emprestimos() {
   const [importSummary, setImportSummary] = useState(null);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [pendingSuggestions, setPendingSuggestions] = useState([]);
+  const [exportChoiceOpen, setExportChoiceOpen] = useState(false);
+  const [exportTarget, setExportTarget] = useState(null);
 
   const { data: emprestimos = [], isLoading } = useQuery({
     queryKey: ['emprestimos', sort],
@@ -1211,14 +1213,51 @@ export default function Emprestimos() {
                 <Button variant="outline" size="sm" onClick={() => handleEdit(detailItem)}>
                   Editar Detalhes
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => { gerarPDFEmprestimo(detailItem, pdfTemplates, user); }}>
-                  <FileDown className="w-4 h-4 mr-1" />PDF (Template)
+                <Button variant="outline" size="sm" onClick={() => { setExportTarget(detailItem); setExportChoiceOpen(true); }}>
+                  <FileDown className="w-4 h-4 mr-1" />Exportar Auto
                 </Button>
               </div>
             </div>
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Export Choice Dialog */}
+      <Dialog open={exportChoiceOpen} onOpenChange={setExportChoiceOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Exportar Documento</DialogTitle>
+            <DialogDescription>Escolha o formato pretendido para o auto de entrega.</DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-4 py-4">
+            <Button 
+              variant="outline" 
+              className="h-24 flex flex-col gap-2 border-2 hover:border-primary hover:bg-primary/5"
+              onClick={() => {
+                gerarPDFEmprestimo(exportTarget, pdfTemplates, user, 'pdf');
+                setExportChoiceOpen(false);
+              }}
+            >
+              <FileText className="w-8 h-8 text-red-500" />
+              <span className="font-bold">PDF</span>
+            </Button>
+            <Button 
+              variant="outline" 
+              className="h-24 flex flex-col gap-2 border-2 hover:border-primary hover:bg-primary/5"
+              onClick={() => {
+                gerarPDFEmprestimo(exportTarget, pdfTemplates, user, 'docx');
+                setExportChoiceOpen(false);
+              }}
+            >
+              <FileDown className="w-8 h-8 text-blue-500" />
+              <span className="font-bold">Word (DOCX)</span>
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setExportChoiceOpen(false)}>Cancelar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <DocumentViewer 
         open={!!selectedDoc} 

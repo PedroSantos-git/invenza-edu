@@ -98,8 +98,12 @@ viii. \t Está vedada a realização de comunicações em roaming fora da UE.
 
 /**
  * Main export function: Prioritizes DOCX substitution, falls back to HTML-to-PDF
+ * @param {string} title Filename title
+ * @param {object} template Template object from DB
+ * @param {object} vars Variables to replace
+ * @param {string} format 'pdf' or 'docx' (defaults to both if template has file_base64)
  */
-async function exportDocument(title, template, vars = {}) {
+export async function exportDocument(title, template, vars = {}, format = null) {
   if (!vars) vars = {};
   // Map barcodes if they are base64 images
   const docxData = { ...vars };
@@ -119,7 +123,7 @@ async function exportDocument(title, template, vars = {}) {
   if (vars.barcode_serie) docxData.barcode_serie = vars.barcode_serie;
   if (vars.barcode_imobilizado) docxData.barcode_imobilizado = vars.barcode_imobilizado;
 
-  if (template?.file_base64) {
+  if (template?.file_base64 && (format === 'docx' || !format)) {
     try {
       // 1. Generate filled DOCX
       const docxBlob = await DocxProcessor.generateDocx(template.file_base64, docxData);
@@ -127,24 +131,25 @@ async function exportDocument(title, template, vars = {}) {
       // 2. Offer DOCX download
       saveAs(docxBlob, `${title.replace(/\s+/g, '_')}.docx`);
       
-      // 3. Also generate PDF for convenience (from the HTML preview)
-      if (template.conteudo) {
-        const filledHtml = fillHtmlVariables(template.conteudo, vars);
-        await DocxProcessor.htmlToPdf(filledHtml, `${title.replace(/\s+/g, '_')}.pdf`);
-      }
-      return;
+      // If a specific format was requested and it was docx, we're done
+      if (format === 'docx') return;
     } catch (err) {
-      console.error('DOCX Export failed, falling back to PDF:', err);
-      toast.error('Erro ao gerar DOCX. A tentar PDF...');
+      console.error('DOCX Export failed:', err);
+      toast.error('Erro ao gerar DOCX.');
     }
   }
 
-  // Fallback: Original HTML to PDF logic
-  if (template?.conteudo) {
-    const filledHtml = fillHtmlVariables(template.conteudo, vars);
-    await DocxProcessor.htmlToPdf(filledHtml, `${title.replace(/\s+/g, '_')}.pdf`);
-  } else {
-    toast.error('Template sem conteúdo para gerar PDF.');
+  // PDF Generation (either requested specifically, or as fallback, or as part of both)
+  if (template?.conteudo && (format === 'pdf' || !format)) {
+    try {
+      const filledHtml = fillHtmlVariables(template.conteudo, vars);
+      await DocxProcessor.htmlToPdf(filledHtml, `${title.replace(/\s+/g, '_')}.pdf`);
+    } catch (err) {
+      console.error('PDF Export failed:', err);
+      toast.error('Erro ao gerar PDF.');
+    }
+  } else if (!template?.conteudo && format === 'pdf') {
+    toast.error('Template sem conteúdo HTML para gerar PDF.');
   }
 }
 
@@ -377,23 +382,11 @@ export async function gerarPDFEmprestimoDiretoAluno(emprestimo, currentUser = nu
   doc.save(`Auto_Entrega_Aluno_${emprestimo.id}.pdf`);
 }
 
-export async function gerarPDFEmprestimo(emprestimo, templates = [], currentUser = null) {
-  // Fetch full data if needed
-  const pessoa = await db.entities.Pessoa.get(emprestimo.pessoa_id);
-  const eq = await db.entities.Equipamento.get(emprestimo.equipamento_id);
-  
-  // Fetch all kit items
-  let kitItems = [eq];
-  if (eq?.numero_imobilizado?.trim()) {
-    const { data: siblings } = await db.client
-      .from('equipamentos')
-      .select('*')
-      .eq('numero_imobilizado', eq.numero_imobilizado.trim())
-      .neq('id', eq.id);
-    if (siblings && siblings.length > 0) {
-      kitItems = [eq, ...siblings];
-    }
-  }
+/**
+ * Prepares variables for an loan document (borrow or return)
+ */
+export async function prepareLoanVars(emprestimo, pessoa, eq, kitItems, currentUser, type = 'emprestimo') {
+  const isBorrow = type === 'emprestimo';
   
   // Prepare kit variables
   const validKitItems = (kitItems || []).filter(Boolean);
@@ -406,11 +399,9 @@ export async function gerarPDFEmprestimo(emprestimo, templates = [], currentUser
   const equipmentSections = generateEquipmentSections(validKitItems);
   
   const isAluno = pessoa?.tipo === 'Aluno';
-  const templateType = isAluno ? 'EMPRESTIMO_ALUNO' : 'EMPRESTIMO_DOCENTE';
-  const template = templates.find(t => t.tipo === templateType && t.ativo !== false) || templates.find(t => t.tipo === 'EMPRESTIMO');
-
+  
   // Generate header section
-  const dataHoraStr = formatDataHora(emprestimo.data_emprestimo || emprestimo.created_at);
+  const dataHoraStr = formatDataHora(isBorrow ? (emprestimo.data_emprestimo || emprestimo.created_at) : (emprestimo.data_devolucao || emprestimo.created_at));
   const dataParte = dataHoraStr.split(', às ')[0];
   const horaParte = dataHoraStr.split(', às ')[1];
   
@@ -441,15 +432,19 @@ export async function gerarPDFEmprestimo(emprestimo, templates = [], currentUser
 
     cabecalhoEntrega = `Auto de Entrega nº ${emprestimo.id}\n\nNo dia ${dataParte}, às ${horaParte}, na Escola Secundária D. João II, Setúbal, sita na R. Dr. Luís Macedo e Castro 2914-510 SETÚBAL procedeu-se à entrega temporária e gratuita dos bens e equipamentos informáticos, abaixo descritos a:\n\n${infoDocente}.`;
   }
-  
-  const vars = {
+
+  return {
     equipamento: eq?.designacao || emprestimo.equipamento_info || '—',
     pessoa: pessoa?.nome || emprestimo.pessoa_info || '—',
     numero_aluno: isAluno ? (pessoa?.nif || '—') : '—',
     numero_docente: !isAluno ? (pessoa?.nif || '—') : '—',
     data_emprestimo: formatDate(emprestimo.data_emprestimo),
+    data_devolucao: isBorrow ? '—' : formatDate(emprestimo.data_devolucao),
+    estado_equipamento: isBorrow ? '—' : (emprestimo.estado_equipamento || '—'),
     notas_entrega: emprestimo.notas_entrega || '—',
-    acessorios: formatAcessorios(emprestimo.acessorios_entregues),
+    notas: isBorrow ? (emprestimo.notas_entrega || '—') : (emprestimo.notas || '—'),
+    acessorios: isBorrow ? formatAcessorios(emprestimo.acessorios_entregues) : formatAcessorios(emprestimo.acessorios_devolvidos),
+    acessorios_devolvidos: isBorrow ? '—' : formatAcessorios(emprestimo.acessorios_devolvidos),
     data_hoje: formatDate(new Date()),
     uuid: emprestimo.id,
     numero_serie: eq?.numero_serie || '—',
@@ -458,7 +453,7 @@ export async function gerarPDFEmprestimo(emprestimo, templates = [], currentUser
     kit_items: kitItemsStr,
     
     // New variables
-    data_hora: formatDataHora(emprestimo.data_emprestimo || emprestimo.created_at),
+    data_hora: dataHoraStr,
     ee_nome: pessoa?.ee_nome || '—',
     ee_nif: pessoa?.ee_nif || '—',
     nome_aluno: isAluno ? pessoa?.nome : '—',
@@ -480,8 +475,33 @@ export async function gerarPDFEmprestimo(emprestimo, templates = [], currentUser
     equipamento_secao_a: equipmentSections.find(s => s.letter === 'A')?.content || '',
     equipamento_secao_b: equipmentSections.find(s => s.letter === 'B')?.content || ''
   };
+}
 
-  await exportDocument(`Emprestimo_${isAluno ? 'Aluno' : 'Docente'}`, template, vars);
+export async function gerarPDFEmprestimo(emprestimo, templates = [], currentUser = null, format = null) {
+  // Fetch full data if needed
+  const pessoa = await db.entities.Pessoa.get(emprestimo.pessoa_id);
+  const eq = await db.entities.Equipamento.get(emprestimo.equipamento_id);
+  
+  // Fetch all kit items
+  let kitItems = [eq];
+  if (eq?.numero_imobilizado?.trim()) {
+    const { data: siblings } = await db.client
+      .from('equipamentos')
+      .select('*')
+      .eq('numero_imobilizado', eq.numero_imobilizado.trim())
+      .neq('id', eq.id);
+    if (siblings && siblings.length > 0) {
+      kitItems = [eq, ...siblings];
+    }
+  }
+  
+  const vars = await prepareLoanVars(emprestimo, pessoa, eq, kitItems, currentUser, 'emprestimo');
+
+  const isAluno = pessoa?.tipo === 'Aluno';
+  const templateType = isAluno ? 'EMPRESTIMO_ALUNO' : 'EMPRESTIMO_DOCENTE';
+  const template = templates.find(t => t.tipo === templateType && t.ativo !== false) || templates.find(t => t.tipo === 'EMPRESTIMO');
+
+  await exportDocument(`Emprestimo_${isAluno ? 'Aluno' : 'Docente'}`, template, vars, format);
 }
 
 export async function gerarPDFDevolucao(devolucao, templates = [], currentUser = null) {
