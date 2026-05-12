@@ -21,9 +21,10 @@ function formatDate(d) {
   try { return format(new Date(d), 'dd/MM/yyyy'); } catch { return d; }
 }
 
-function formatAcessorios(obj = {}) {
+function formatAcessorios(obj) {
+  if (!obj || typeof obj !== 'object') return 'Nenhum';
   return Object.entries(ACESSORIOS_LABELS)
-    .filter(([k]) => obj[k])
+    .filter(([k]) => obj && obj[k])
     .map(([, v]) => v)
     .join(', ') || 'Nenhum';
 }
@@ -144,17 +145,27 @@ export async function exportDocument(title, template, vars = {}, format = null) 
       }
 
       // PDF Generation (either requested specifically, or as fallback, or as part of both)
-      if (template?.conteudo && (format === 'pdf' || !format)) {
+      if (format === 'pdf' || !format) {
         try {
-          const filledHtml = fillHtmlVariables(template.conteudo, vars);
-          // Wait for the promise to ensure the process finishes
-          await DocxProcessor.htmlToPdf(filledHtml, `${title.replace(/\s+/g, '_')}.pdf`);
+          let html = template?.conteudo;
+          
+          // If HTML content is missing but we have the DOCX base64, try to generate it on the fly
+          if (!html && template?.file_base64) {
+            console.log('Template HTML missing, generating from DOCX base64...');
+            html = await DocxProcessor.getHtmlFromBase64(template.file_base64);
+          }
+
+          if (html) {
+            const filledHtml = fillHtmlVariables(html, vars);
+            // Wait for the promise to ensure the process finishes
+            await DocxProcessor.htmlToPdf(filledHtml, `${title.replace(/\s+/g, '_')}.pdf`);
+          } else {
+            throw new Error('Template sem conteúdo HTML disponível para gerar PDF.');
+          }
         } catch (err) {
           console.error('PDF Export failed:', err);
           throw new Error('Falha ao gerar PDF: ' + (err.message || 'Erro desconhecido'));
         }
-      } else if (!template?.conteudo && format === 'pdf') {
-        throw new Error('Template sem conteúdo HTML para gerar PDF.');
       }
     })(),
     {
@@ -490,20 +501,29 @@ export async function prepareLoanVars(emprestimo, pessoa, eq, kitItems, currentU
 }
 
 export async function gerarPDFEmprestimo(emprestimo, templates = [], currentUser = null, format = null) {
+  if (!emprestimo) {
+    toast.error('Dados do empréstimo não fornecidos.');
+    return;
+  }
+
   // Fetch full data if needed
   const pessoa = await db.entities.Pessoa.get(emprestimo.pessoa_id);
   const eq = await db.entities.Equipamento.get(emprestimo.equipamento_id);
   
   // Fetch all kit items
-  let kitItems = [eq];
+  let kitItems = eq ? [eq] : [];
   if (eq?.numero_imobilizado?.trim()) {
-    const { data: siblings } = await db.client
-      .from('equipamentos')
-      .select('*')
-      .eq('numero_imobilizado', eq.numero_imobilizado.trim())
-      .neq('id', eq.id);
-    if (siblings && siblings.length > 0) {
-      kitItems = [eq, ...siblings];
+    try {
+      const { data: siblings } = await db.client
+        .from('equipamentos')
+        .select('*')
+        .eq('numero_imobilizado', eq.numero_imobilizado.trim())
+        .neq('id', eq.id);
+      if (siblings && siblings.length > 0) {
+        kitItems = [eq, ...siblings];
+      }
+    } catch (e) {
+      console.warn('Erro ao buscar equipamentos do conjunto:', e);
     }
   }
   
@@ -511,7 +531,16 @@ export async function gerarPDFEmprestimo(emprestimo, templates = [], currentUser
 
   const isAluno = pessoa?.tipo === 'Aluno';
   const templateType = isAluno ? 'EMPRESTIMO_ALUNO' : 'EMPRESTIMO_DOCENTE';
-  const template = templates.find(t => t.tipo === templateType && t.ativo !== false) || templates.find(t => t.tipo === 'EMPRESTIMO');
+  
+  // Encontrar o template adequado
+  const template = templates.find(t => t.tipo === templateType && t.ativo !== false) || 
+                   templates.find(t => t.tipo === 'EMPRESTIMO' && t.ativo !== false) ||
+                   templates[0]; // Fallback para o primeiro se nenhum coincidir
+
+  if (!template) {
+    toast.error('Nenhum template de documento encontrado. Por favor, configure um nas Definições.');
+    return;
+  }
 
   await exportDocument(`Emprestimo_${isAluno ? 'Aluno' : 'Docente'}`, template, vars, format);
 }

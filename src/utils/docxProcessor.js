@@ -42,10 +42,30 @@ export const DocxProcessor = {
   },
 
   /**
+   * Generates HTML preview from DOCX Base64
+   */
+  async getHtmlFromBase64(base64) {
+    try {
+      const binaryString = atob(base64);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const { value } = await mammoth.convertToHtml({ arrayBuffer: bytes.buffer });
+      return value;
+    } catch (err) {
+      console.error('Error generating HTML from Base64:', err);
+      return '';
+    }
+  },
+
+  /**
    * Replaces variables in a DOCX Base64 and returns a Blob
    */
-  async generateDocx(base64, data) {
+  async generateDocx(base64, data = {}) {
     try {
+      if (!base64) throw new Error('Base64 do template não fornecido.');
+      
       const binaryString = atob(base64);
       const bytes = new Uint8Array(binaryString.length);
       for (let i = 0; i < binaryString.length; i++) {
@@ -57,10 +77,10 @@ export const DocxProcessor = {
       const opts = {
         centered: false,
         getImage(tagValue) {
-          if (!tagValue || typeof tagValue !== 'string') return null;
+          if (!tagValue || typeof tagValue !== 'string' || tagValue === '—') return null;
           try {
-            // Assume tagValue is a base64 string or URL
-            const base64Data = tagValue.split(',')[1] || tagValue;
+            // Check if it's a valid base64 image string
+            const base64Data = tagValue.includes('base64,') ? tagValue.split(',')[1] : tagValue;
             if (!base64Data || base64Data.length < 10) return null;
             
             const binaryString = atob(base64Data);
@@ -91,24 +111,28 @@ export const DocxProcessor = {
         parser: (tag) => {
           return {
             get(scope) {
-              if (!scope || typeof scope !== 'object') return '';
+              // Extremely robust scope check
+              if (scope === null || scope === undefined) return '';
               
               const isImageTag = tag.startsWith('%');
               const cleanTag = isImageTag ? tag.substring(1) : tag;
               
               let value = '';
               try {
-                // Try both with and without the prefix
-                value = scope[cleanTag] ?? scope[tag] ?? '';
+                // Safe access to scope
+                if (typeof scope === 'object') {
+                  value = scope[cleanTag] ?? scope[tag] ?? '';
+                } else {
+                  value = scope;
+                }
               } catch (e) {
                 console.warn(`Error accessing tag ${tag}:`, e);
                 value = '';
               }
               
-              // If it's an image tag and we have no value, return a placeholder or empty string
-              // Returning an empty string instead of null to avoid "null is not an object" errors in some modules
-              if (isImageTag && (!value || value === '—')) {
-                return ''; 
+              // If it's an image tag and we have no value, return null to let ImageModule skip it
+              if (isImageTag && (!value || value === '—' || value === '')) {
+                return null; 
               }
               
               if (typeof value === 'string' && value.startsWith('BOLD:')) {
@@ -121,17 +145,14 @@ export const DocxProcessor = {
         }
       });
 
-      // Se os dados contiverem as tags antigas {{...}}, vamos mapear para [[...]]
-      // ou apenas garantir que o parser lida com o que recebe.
-      // No entanto, a melhor solução é mudar o delimitador para evitar o conflito do XML.
+      // Ensure data is an object
+      const safeData = data && typeof data === 'object' ? data : {};
 
       // Use try-catch for the render process
       try {
-        doc.render(data || {});
+        doc.render(safeData);
       } catch (error) {
-        // Docxtemplater throws a rich error object
         console.error('Docxtemplater render error:', error);
-        
         if (error.properties && error.properties.errors instanceof Array) {
           const errorMessages = error.properties.errors
             .map(err => err.properties?.explanation || err.message)
@@ -190,13 +211,14 @@ export const DocxProcessor = {
     container.style.zIndex = '-9999';
     container.style.backgroundColor = 'white';
     container.style.color = 'black';
-    container.style.visibility = 'hidden';
+    container.style.opacity = '0.01'; // Use low opacity instead of hidden
+    container.style.pointerEvents = 'none';
     container.innerHTML = htmlContent;
     document.body.appendChild(container);
 
     try {
       // Wait a bit for any internal images or styles to settle
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 800));
       
       console.log('Capturing canvas...');
       const canvas = await html2canvas(container, { 
@@ -204,7 +226,9 @@ export const DocxProcessor = {
         useCORS: true,
         allowTaint: true,
         logging: true,
-        backgroundColor: '#ffffff'
+        backgroundColor: '#ffffff',
+        windowWidth: container.scrollWidth,
+        windowHeight: container.scrollHeight
       });
       
       console.log('Canvas captured, creating PDF...');
