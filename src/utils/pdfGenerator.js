@@ -27,6 +27,73 @@ function formatAcessorios(obj = {}) {
     .join(', ') || 'Nenhum';
 }
 
+function formatDataHora() {
+  const now = new Date();
+  const dia = now.getDate().toString().padStart(2, '0');
+  const mes = (now.getMonth() + 1).toString().padStart(2, '0');
+  const ano = now.getFullYear();
+  const horas = now.getHours().toString().padStart(2, '0');
+  const minutos = now.getMinutes().toString().padStart(2, '0');
+  return `${dia}   /  ${mes}  /  ${ano} , às  ${horas}  horas  ${minutos}  minutos`;
+}
+
+function generateEquipmentSections(kitItems) {
+  const sections = [];
+  let sectionLetter = 'A';
+  
+  const pcs = kitItems.filter(item => item.tipo?.toUpperCase().startsWith('PC'));
+  const hotspots = kitItems.filter(item => item.tipo?.toUpperCase().includes('HOTSPOT'));
+  const others = kitItems.filter(item => !pcs.includes(item) && !hotspots.includes(item));
+  
+  if (pcs.length > 0) {
+    const pc = pcs[0];
+    sections.push({
+      letter: sectionLetter++,
+      title: 'Computador',
+      items: pcs,
+      content: `
+a) \t Computador ${pc.tipo || 'PC'}:
+
+
+\t N.º de série do computador n.º ${pc.numero_serie || '—'}; 
+\t N.º de imobilizado do computador n.º ${pc.numero_imobilizado || '—'}; 
+\t Mochila; 
+\t Transformador; 
+\t Auscultador com microfone (Headset). 
+`
+    });
+  }
+  
+  if (hotspots.length > 0) {
+    const hotspot = hotspots[0];
+    sections.push({
+      letter: sectionLetter++,
+      title: 'Conetividade Hotspot',
+      items: hotspots,
+      content: `
+b) \t Conetividade Hotspot:
+
+
+  N.º de série/ID n.º ${hotspot.numero_serie || '—'}; 
+\t SIM Card - cartão SIM n.º (Por Atribuir); 
+  
+\t Caraterísticas da conetividade: 
+
+i. \t Plafond de 12 GBytes/mensais, sem restrições de acessos ou débito; 
+ii. \t Débito garantido igual ou superior a 2 Mbps; 
+iii. \t Avisos ao utilizador (SMS) a 80% e 100% do consumo do plafond de 12 Gbytes/mensais referido na alínea i.; 
+iv. \t Uma vez esgotado o plafond referido na alínea i. será aplicada uma limitação do débito, respeitando o estabelecido na alínea ii. de 2 Mbps; 
+v. \t Capacidade de utilização das redes 2G, 3G e 4G; 
+vi. \t Uma vez esgotado o plafond referido na alínea i., o utilizador pode proceder à aquisição de tráfego adicional, em múltiplos de 2GBytes, pelo preço unitário de € 5,00 (cinco euros), com IVA incluído, através de Multibanco, Home banking ou MB Way, aplicando-se à prestação desse serviço, pelo menos, as mesmas condições técnicas previstas; 
+vii. \t Está vedada a possibilidade de realização de comunicações de voz; 
+viii. \t Está vedada a realização de comunicações em roaming fora da UE. 
+`
+    });
+  }
+  
+  return sections;
+}
+
 /**
  * Main export function: Prioritizes DOCX substitution, falls back to HTML-to-PDF
  */
@@ -104,6 +171,9 @@ export async function gerarPDFEmprestimo(emprestimo, templates = []) {
     .map(item => `${item.tipo || 'Equipamento'} - ${item.numero_serie || '—'}`)
     .join('\n');
   
+  // Prepare structured equipment sections
+  const equipmentSections = generateEquipmentSections(kitItems);
+  
   const isAluno = pessoa?.tipo === 'Aluno';
   const templateType = isAluno ? 'EMPRESTIMO_ALUNO' : 'EMPRESTIMO_DOCENTE';
   const template = templates.find(t => t.tipo === templateType && t.ativo !== false) || templates.find(t => t.tipo === 'EMPRESTIMO');
@@ -111,7 +181,7 @@ export async function gerarPDFEmprestimo(emprestimo, templates = []) {
   const vars = {
     equipamento: eq?.designacao || emprestimo.equipamento_info || '—',
     pessoa: pessoa?.nome || emprestimo.pessoa_info || '—',
-    numero_aluno: isAluno ? (pessoa?.nif || '—') : '—', // Or another field for student number
+    numero_aluno: isAluno ? (pessoa?.nif || '—') : '—',
     numero_docente: !isAluno ? (pessoa?.nif || '—') : '—',
     data_emprestimo: formatDate(emprestimo.data_emprestimo),
     notas_entrega: emprestimo.notas_entrega || '—',
@@ -121,7 +191,23 @@ export async function gerarPDFEmprestimo(emprestimo, templates = []) {
     numero_serie: eq?.numero_serie || '—',
     numero_imobilizado: eq?.numero_imobilizado || '—',
     kit_count: kitCount,
-    kit_items: kitItemsStr
+    kit_items: kitItemsStr,
+    
+    // New variables
+    data_hora: formatDataHora(),
+    ee_nome: pessoa?.ee_nome || '—',
+    ee_nif: pessoa?.ee_nif || '—',
+    nome_aluno: isAluno ? pessoa?.nome : '—',
+    nif_aluno: isAluno ? pessoa?.nif : '—',
+    numero_processo_aluno: isAluno ? pessoa?.n_processo : '—',
+    turma_aluno: isAluno ? pessoa?.turma : '—',
+    nome_docente: !isAluno ? pessoa?.nome : '—',
+    nif_docente: !isAluno ? pessoa?.nif : '—',
+    
+    // Equipment section variables
+    equipamento_secoes: equipmentSections.map(s => s.content).join(''),
+    equipamento_secao_a: equipmentSections.find(s => s.letter === 'A')?.content || '',
+    equipamento_secao_b: equipmentSections.find(s => s.letter === 'B')?.content || ''
   };
 
   await exportDocument(`Emprestimo_${isAluno ? 'Aluno' : 'Docente'}`, template, vars);
@@ -150,6 +236,9 @@ export async function gerarPDFDevolucao(devolucao, templates = []) {
   const kitItemsStr = kitItems
     .map(item => `${item.tipo || 'Equipamento'} - ${item.numero_serie || '—'}`)
     .join('\n');
+  
+  // Prepare structured equipment sections
+  const equipmentSections = generateEquipmentSections(kitItems);
 
   const isAluno = pessoa?.tipo === 'Aluno';
   const templateType = isAluno ? 'DEVOLUCAO_ALUNO' : 'DEVOLUCAO_DOCENTE';
@@ -169,7 +258,23 @@ export async function gerarPDFDevolucao(devolucao, templates = []) {
     numero_serie: eq?.numero_serie || '—',
     numero_imobilizado: eq?.numero_imobilizado || '—',
     kit_count: kitCount,
-    kit_items: kitItemsStr
+    kit_items: kitItemsStr,
+    
+    // New variables
+    data_hora: formatDataHora(),
+    ee_nome: pessoa?.ee_nome || '—',
+    ee_nif: pessoa?.ee_nif || '—',
+    nome_aluno: isAluno ? pessoa?.nome : '—',
+    nif_aluno: isAluno ? pessoa?.nif : '—',
+    numero_processo_aluno: isAluno ? pessoa?.n_processo : '—',
+    turma_aluno: isAluno ? pessoa?.turma : '—',
+    nome_docente: !isAluno ? pessoa?.nome : '—',
+    nif_docente: !isAluno ? pessoa?.nif : '—',
+    
+    // Equipment section variables
+    equipamento_secoes: equipmentSections.map(s => s.content).join(''),
+    equipamento_secao_a: equipmentSections.find(s => s.letter === 'A')?.content || '',
+    equipamento_secao_b: equipmentSections.find(s => s.letter === 'B')?.content || ''
   };
 
   await exportDocument(`Devolucao_${isAluno ? 'Aluno' : 'Docente'}`, template, vars);
@@ -198,6 +303,9 @@ export async function gerarPDFAvaria(avaria, templates = []) {
     .map(item => `${item.tipo || 'Equipamento'} - ${item.numero_serie || '—'}`)
     .join('\n');
   
+  // Prepare structured equipment sections
+  const equipmentSections = generateEquipmentSections(kitItems);
+  
   const template = templates.find(t => t.tipo === 'AVARIA' && t.ativo !== false);
 
   const comps = avaria.componentes || {};
@@ -221,7 +329,15 @@ export async function gerarPDFAvaria(avaria, templates = []) {
     numero_serie: eq?.numero_serie || '—',
     numero_imobilizado: eq?.numero_imobilizado || '—',
     kit_count: kitCount,
-    kit_items: kitItemsStr
+    kit_items: kitItemsStr,
+    
+    // New variables
+    data_hora: formatDataHora(),
+    
+    // Equipment section variables
+    equipamento_secoes: equipmentSections.map(s => s.content).join(''),
+    equipamento_secao_a: equipmentSections.find(s => s.letter === 'A')?.content || '',
+    equipamento_secao_b: equipmentSections.find(s => s.letter === 'B')?.content || ''
   };
   await exportDocument('Avaria', template, vars);
 }
@@ -246,6 +362,9 @@ export async function gerarPDFEquipamento(equipamento, templates = []) {
     .map(item => `${item.tipo || 'Equipamento'} - ${item.numero_serie || '—'}`)
     .join('\n');
   
+  // Prepare structured equipment sections
+  const equipmentSections = generateEquipmentSections(kitItems);
+  
   const template = templates.find(t => t.tipo === 'EQUIPAMENTO' && t.ativo !== false);
   const vars = {
     designacao: equipamento.designacao || '—',
@@ -260,7 +379,15 @@ export async function gerarPDFEquipamento(equipamento, templates = []) {
     data_hoje: formatDate(new Date()),
     uuid: equipamento.id,
     kit_count: kitCount,
-    kit_items: kitItemsStr
+    kit_items: kitItemsStr,
+    
+    // New variables
+    data_hora: formatDataHora(),
+    
+    // Equipment section variables
+    equipamento_secoes: equipmentSections.map(s => s.content).join(''),
+    equipamento_secao_a: equipmentSections.find(s => s.letter === 'A')?.content || '',
+    equipamento_secao_b: equipmentSections.find(s => s.letter === 'B')?.content || ''
   };
   await exportDocument('Equipamento', template, vars);
 }
