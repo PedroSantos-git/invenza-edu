@@ -57,17 +57,24 @@ export const DocxProcessor = {
       const opts = {
         centered: false,
         getImage(tagValue) {
-          if (!tagValue) return null;
-          // Assume tagValue is a base64 string or URL
-          const base64Data = tagValue.split(',')[1] || tagValue;
-          const binaryString = atob(base64Data);
-          const bytes = new Uint8Array(binaryString.length);
-          for (let i = 0; i < binaryString.length; i++) {
-            bytes[i] = binaryString.charCodeAt(i);
+          if (!tagValue || typeof tagValue !== 'string') return null;
+          try {
+            // Assume tagValue is a base64 string or URL
+            const base64Data = tagValue.split(',')[1] || tagValue;
+            if (!base64Data || base64Data.length < 10) return null;
+            
+            const binaryString = atob(base64Data);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+              bytes[i] = binaryString.charCodeAt(i);
+            }
+            return bytes;
+          } catch (e) {
+            console.warn('Failed to process image tag:', e);
+            return null;
           }
-          return bytes;
         },
-        getSize() {
+        getSize(img, tagValue, tagName) {
           return [150, 50]; // [width, height] in pixels
         }
       };
@@ -85,13 +92,27 @@ export const DocxProcessor = {
           return {
             get(scope) {
               if (!scope) return '';
-              // Se a tag começar por %, tratamos como imagem/barcode (opcional no parser, o ImageModule trata)
-              const cleanTag = tag.startsWith('%') ? tag.substring(1) : tag;
-              let value = scope[cleanTag] ?? scope[tag] ?? '';
+              
+              // Se a tag começar por %, o docxtemplater-image-module trata-a, 
+              // mas o parser precisa devolver o valor original (a base64) para o ImageModule usar
+              const isImageTag = tag.startsWith('%');
+              const cleanTag = isImageTag ? tag.substring(1) : tag;
+              
+              // Tentar obter o valor da variável
+              let value = scope[cleanTag];
+              if (value === undefined || value === null) {
+                value = scope[tag];
+              }
+              
+              // Se ainda for nulo/indefinido, devolvemos string vazia (exceto para imagens, onde devolvemos null para o módulo ignorar)
+              if (value === undefined || value === null) {
+                return isImageTag ? null : '';
+              }
               
               if (typeof value === 'string' && value.startsWith('BOLD:')) {
                 return value.replace('BOLD:', '');
               }
+              
               return value;
             }
           };
