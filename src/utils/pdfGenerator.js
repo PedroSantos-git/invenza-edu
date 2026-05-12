@@ -144,6 +144,7 @@ export async function exportDocument(title, template, vars = {}, format = null) 
   if (template?.conteudo && (format === 'pdf' || !format)) {
     try {
       const filledHtml = fillHtmlVariables(template.conteudo, vars);
+      // Wait for the promise to ensure the process finishes
       await DocxProcessor.htmlToPdf(filledHtml, `${title.replace(/\s+/g, '_')}.pdf`);
     } catch (err) {
       console.error('PDF Export failed:', err);

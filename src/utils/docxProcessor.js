@@ -91,17 +91,23 @@ export const DocxProcessor = {
         parser: (tag) => {
           return {
             get(scope) {
-              if (!scope) return '';
+              if (!scope || typeof scope !== 'object') return '';
               
               // Se a tag começar por %, o docxtemplater-image-module trata-a, 
               // mas o parser precisa devolver o valor original (a base64) para o ImageModule usar
               const isImageTag = tag.startsWith('%');
               const cleanTag = isImageTag ? tag.substring(1) : tag;
               
-              // Tentar obter o valor da variável
-              let value = scope[cleanTag];
-              if (value === undefined || value === null) {
-                value = scope[tag];
+              // Tentar obter o valor da variável de forma segura
+              let value = null;
+              try {
+                value = scope[cleanTag];
+                if (value === undefined || value === null) {
+                  value = scope[tag];
+                }
+              } catch (e) {
+                console.warn(`Error accessing tag ${tag} in scope:`, e);
+                value = '';
               }
               
               // Se ainda for nulo/indefinido, devolvemos string vazia (exceto para imagens, onde devolvemos null para o módulo ignorar)
@@ -176,14 +182,25 @@ export const DocxProcessor = {
       const canvas = await html2canvas(container, { scale: 2 });
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
-      const imgProps = pdf.getImageProperties(imgData);
       const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+      const pdfHeight = pdf.internal.pageSize.getHeight();
       
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      const imgProps = pdf.getImageProperties(imgData);
+      const imgWidth = pdfWidth;
+      const imgHeight = (imgProps.height * imgWidth) / imgProps.width;
+      
+      // If content is taller than one page, we might need multiple pages
+      // For now, let's just add it to one page. If you need multi-page, 
+      // html2pdf-jspdf logic would be better.
+      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
       pdf.save(filename || 'documento.pdf');
+    } catch (err) {
+      console.error('Error in htmlToPdf:', err);
+      throw err;
     } finally {
-      document.body.removeChild(container);
+      if (document.body.contains(container)) {
+        document.body.removeChild(container);
+      }
     }
   },
   
