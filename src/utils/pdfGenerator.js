@@ -183,13 +183,19 @@ export async function gerarPDFEmprestimoDiretoAluno(emprestimo, currentUser = nu
     doc.setFontSize(size);
     doc.setFont('helvetica', isBold ? 'bold' : 'normal');
     if (isUnderlined) {
-      doc.setFont('helvetica', isBold ? 'bold' : 'normal', 'underline');
-    } else {
-      doc.setFont('helvetica', isBold ? 'bold' : 'normal', 'normal');
+      doc.setDrawColor(0);
+      doc.setFont('helvetica', isBold ? 'bold' : 'normal');
     }
     
     const lines = doc.splitTextToSize(text, contentWidth - indent);
     doc.text(lines, marginLeft + indent, y);
+    
+    if (isUnderlined) {
+      lines.forEach((line, i) => {
+        const lineWidth = doc.getTextWidth(line);
+        doc.line(marginLeft + indent, y + (i * (size / 2.5)) + 2, marginLeft + indent + lineWidth, y + (i * (size / 2.5)) + 2);
+      });
+    }
     
     y += (lines.length * (size / 2.5)) + 3;
   }
