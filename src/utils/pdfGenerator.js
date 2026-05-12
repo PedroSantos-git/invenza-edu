@@ -34,7 +34,7 @@ function formatDataHora() {
   const ano = now.getFullYear();
   const horas = now.getHours().toString().padStart(2, '0');
   const minutos = now.getMinutes().toString().padStart(2, '0');
-  return `${dia}   /  ${mes}  /  ${ano} , às  ${horas}  horas  ${minutos}  minutos`;
+  return `${dia}/${mes}/${ano}, às ${horas} horas e ${minutos} minutos`;
 }
 
 function generateEquipmentSections(kitItems) {
@@ -402,25 +402,36 @@ export async function gerarPDFEmprestimo(emprestimo, templates = [], currentUser
   const template = templates.find(t => t.tipo === templateType && t.ativo !== false) || templates.find(t => t.tipo === 'EMPRESTIMO');
 
   // Generate header section
+  const dataHoraStr = formatDataHora();
+  const dataParte = dataHoraStr.split(', às ')[0];
+  const horaParte = dataHoraStr.split(', às ')[1];
+  
   let cabecalhoEntrega = '';
   if (isAluno) {
-    cabecalhoEntrega = `
-Auto de Entrega nº ${emprestimo.id}
+    const infoAluno = [
+      pessoa?.ee_nome ? `${pessoa.ee_nome}, Encarregado de Educação` : '',
+      pessoa?.ee_nif ? `com o NIF ${pessoa.ee_nif}` : '',
+      pessoa?.nome ? `do aluno ${pessoa.nome}` : '',
+      pessoa?.n_processo ? `nº de processo ${pessoa.n_processo}` : '',
+      'matriculado na Escola Secundária D. João II, Setúbal',
+      pessoa?.turma ? `a frequentar o ${pessoa.turma}` : '',
+      pessoa?.nif ? `com o NIF ${pessoa.nif}` : ''
+    ].filter(Boolean).join(', ');
 
-No dia ${formatDataHora().split(' às ')[0]}, às ${formatDataHora().split(' às ')[1]}, na Escola Secundária D. João II, Setúbal, sita na R. Dr. Luís Macedo e Castro 2914-510 SETÚBAL procedeu-se à entrega temporária e gratuita dos bens e equipamentos informáticos, abaixo descritos a:
-
-${pessoa?.ee_nome || '—'}, Encarregado de Educação, com o NIF ${pessoa?.ee_nif || '—'}, do aluno ${pessoa?.nome || '—'}, nº de processo ${pessoa?.n_processo || '—'} matriculado na Escola Secundária D. João II, Setúbal, a frequentar o ${pessoa?.turma || '—'}, com o NIF ${pessoa?.nif || '—'}.
-`;
+    cabecalhoEntrega = `Auto de Entrega nº ${emprestimo.id}\n\nNo dia ${dataParte}, às ${horaParte}, na Escola Secundária D. João II, Setúbal, sita na R. Dr. Luís Macedo e Castro 2914-510 SETÚBAL procedeu-se à entrega temporária e gratuita dos bens e equipamentos informáticos, abaixo descritos a:\n\n${infoAluno}.`;
   } else {
-    cabecalhoEntrega = `
-Auto de Entrega: nº ${emprestimo.id}
+    const infoDocente = [
+      pessoa?.nome ? `${pessoa.nome}, Docente` : '',
+      pessoa?.grupo_recrutamento ? `do grupo de recrutamento ${pessoa.grupo_recrutamento}` : '',
+      pessoa?.qe ? `do QE ${pessoa.qe}` : '',
+      pessoa?.email ? `email ${pessoa.email}` : '',
+      'a exercer funções letivas no Escola Secundária D. João II, Setúbal',
+      pessoa?.morada ? `e residente em ${pessoa.morada}` : '',
+      pessoa?.nif ? `com o NIF ${pessoa.nif}` : '',
+      pessoa?.cc_numero ? `titular do Cartão de Cidadão n.º ${pessoa.cc_numero}` : ''
+    ].filter(Boolean).join(', ');
 
-
-No dia ${formatDataHora().split(' às ')[0]}, às ${formatDataHora().split(' às ')[1]}, na Escola Secundária D. João II, Setúbal, sita na R. Dr. Luís Macedo e Castro 2914-510 SETÚBAL procedeu-se à entrega temporária e gratuita dos bens e equipamentos informáticos, abaixo descritos a:
-
-
-${pessoa?.nome || '—'}, Docente, do grupo de recrutamento ${pessoa?.grupo_recrutamento || '—'}, do QE ${pessoa?.qe || '—'}, ${pessoa?.email || '—'}, a exercer funções letivas no Escola Secundária D. João II, Setúbal, e residente em ${pessoa?.morada || '—'}, com o NIF ${pessoa?.nif || '—'}, titular do Cartão de Cidadão n.º ${pessoa?.cc_numero || '—'}.
-`;
+    cabecalhoEntrega = `Auto de Entrega nº ${emprestimo.id}\n\nNo dia ${dataParte}, às ${horaParte}, na Escola Secundária D. João II, Setúbal, sita na R. Dr. Luís Macedo e Castro 2914-510 SETÚBAL procedeu-se à entrega temporária e gratuita dos bens e equipamentos informáticos, abaixo descritos a:\n\n${infoDocente}.`;
   }
   
   const vars = {

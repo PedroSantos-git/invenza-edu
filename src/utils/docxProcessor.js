@@ -232,22 +232,23 @@ export const DocxProcessor = {
           new TextRun({ text: "Auto de entrega nº ", bold: true, size: 28 }),
           new TextRun({ text: "[[uuid]]", size: 28 })
         ],
-        spacing: { after: 200 }
+        spacing: { after: 200 },
+        alignment: "center"
       }),
       new Paragraph({ 
         children: [new TextRun("[[cabecalho_entrega]]")], 
         spacing: { after: 200 },
-        alignment: "center"
+        alignment: "both"
       }),
       new Paragraph({ 
         children: [new TextRun("São cedidos a título gratuito, com a obrigação de restituição, os seguintes equipamentos:")], 
         spacing: { after: 200 },
-        alignment: "center"
+        alignment: "both"
       }),
       new Paragraph({ 
         children: [new TextRun("[[equipamento_secoes]]")], 
         spacing: { after: 400 },
-        alignment: "center"
+        alignment: "both"
       }),
       new Paragraph({ children: [new TextRun({ text: "CONDIÇÕES GERAIS", bold: true, size: 24 })], spacing: { after: 200 } }),
       new Paragraph({ children: [new TextRun("1.\tOs equipamentos cedidos destinam-se a ser utilizados, exclusivamente, para fins do processo de ensino e aprendizagem do Aluno, com início em 04/5/2026 e término na data de conclusão do ciclo de estudos que o Aluno frequenta no momento da cedência, nomeadamente, nas seguintes situações:")], spacing: { after: 200 } }),
@@ -255,17 +256,17 @@ export const DocxProcessor = {
       new Paragraph({ children: [new TextRun("\tb.\tNas situações de transferências de alunos para outro AE/EnA distinto do 2.º outorgante;")], spacing: { after: 100 } }),
       new Paragraph({ children: [new TextRun("\tc.\tEm caso de aplicação de medidas disciplinares sancionatórias ao aluno que determinem a «transferência de escola» ou a «expulsão da escola», previstas, respetivamente, nas alíneas d) e e) do n.º 2 do artigo 28.º do Estatuto do Aluno e Ética Escolar, aprovado pela Lei n.º 51/2012, de 5 de setembro, na sua redação atual;")], spacing: { after: 100 } }),
       new Paragraph({ children: [new TextRun("\td.\tCom a saída do aluno do Ensino Público.")], spacing: { after: 400 } }),
-      new Paragraph({ children: [new TextRun("2.\tNos casos previstos no número 1., a devolução dos equipamentos informáticos, conetividade e serviços conexos pelo EE ou pelo aluno deve ocorrer através da entrega dos mesmos nas instalações da sede do AE/EnA no prazo máximo de uma semana, após a verificação dos factos aí descritos;")], spacing: { after: 200 } }),
-      new Paragraph({ children: [new TextRun("3.\tCaso a entrega dos equipamentos não tenha lugar no prazo previsto no n.º anterior, o/a Encarregado/a de Educação/Aluno/a (comodatário/a) será notificado/a pelo na Escola Secundária D. João II, Setúbal, para a entrega dos equipamentos no término do período previsto no n.º 1, para os contactos indicados pelo/a EE, para esta finalidade, ou na falta, para a sua morada;")], spacing: { after: 200 } }),
-      new Paragraph({ children: [new TextRun("4.\tO equipamento informático deve ser entregue limpo de ficheiros pessoais dos seus utilizadores e subcessionários;")], spacing: { after: 200 } }),
-      new Paragraph({ children: [new TextRun("5.\tO Encarregado de Educação subcessionário obriga-se a zelar pela conservação dos bens e equipamentos que lhe são cedidos por comodato (empréstimo), devendo restituí-los no fim do período indicado nos pontos anteriores nas condições que resultam de um uso responsável e prudente, sob pena do acionamento de obrigações contratualmente previstas por perda ou deterioração dos bens e equipamentos;")], spacing: { after: 200 } }),
-      new Paragraph({ children: [new TextRun("6.\tA instalação de programas ou aplicações informáticas (software) no equipamento cedido, deve ser feita exclusivamente para fins do processo de ensino e aprendizagem;")], spacing: { after: 200 } }),
-      new Paragraph({ children: [new TextRun("7.\tA instalação ou remoção de partes ou componentes (hardware) do equipamento é expressamente proibida;")], spacing: { after: 200 } }),
-      new Paragraph({ children: [new TextRun("8.\tO Encarregado de Educação/Aluno está autorizado a deslocar os equipamentos para fora da morada da sua residência ou domicílio indicada neste auto de entrega, exclusivamente para fins relacionados com o processo de ensino e aprendizagem e bem assim nas situações em que sejam previamente autorizados pelo Ministério da Educação ou pelo/a Diretor(a) do AE/EnA;")], spacing: { after: 200 } }),
-      new Paragraph({ children: [new TextRun("9.\tO Encarregado de Educação subcessionário obriga-se a comunicar imediatamente ao Escola Secundária D. João II, Setúbal a perda ou o roubo dos bens ou equipamentos;")], spacing: { after: 200 } }),
-      new Paragraph({ children: [new TextRun("10.\tO Encarregado de Educação subcessionário obriga-se, ainda, a suportar todas as despesas devidas pela recuperação dos bens ou equipamentos sempre que os danos advenham de mau uso ou negligência na sua conservação;")], spacing: { after: 200 } }),
-      new Paragraph({ children: [new TextRun("11.\tÉ vedada ao Encarregado de Educação subcessionário a possibilidade de sub-comodatar ou locar os bens ou equipamentos objeto cedido a terceiros;")], spacing: { after: 200 } }),
-      new Paragraph({ children: [new TextRun("12.\tEm tudo o que não consta nos pontos anteriores, são aplicáveis à presente cedência de equipamentos para o acesso e a utilização de recursos didáticos e educativos digitais, as disposições constantes dos artigos 1129.º a 1137.º do Código Civil, relativas ao contrato de comodato.")], spacing: { after: 400 } }),
+      new Paragraph({ children: [new TextRun("2.\tNos casos previstos no número 1., a devolução dos equipamentos informáticos, conetividade e serviços conexos pelo EE ou pelo aluno deve ocorrer através da entrega dos mesmos nas instalações da sede do AE/EnA no prazo máximo de uma semana, após a verificação dos factos aí descritos;")], spacing: { after: 200 }, alignment: "both" }),
+      new Paragraph({ children: [new TextRun("3.\tCaso a entrega dos equipamentos não tenha lugar no prazo previsto no n.º anterior, o/a Encarregado/a de Educação/Aluno/a (comodatário/a) será notificado/a pelo na Escola Secundária D. João II, Setúbal, para a entrega dos equipamentos no término do período previsto no n.º 1, para os contactos indicados pelo/a EE, para esta finalidade, ou na falta, para a sua morada;")], spacing: { after: 200 }, alignment: "both" }),
+      new Paragraph({ children: [new TextRun("4.\tO equipamento informático deve ser entregue limpo de ficheiros pessoais dos seus utilizadores e subcessionários;")], spacing: { after: 200 }, alignment: "both" }),
+      new Paragraph({ children: [new TextRun("5.\tO Encarregado de Educação subcessionário obriga-se a zelar pela conservação dos bens e equipamentos que lhe são cedidos por comodato (empréstimo), devendo restituí-los no fim do período indicado nos pontos anteriores nas condições que resultam de um uso responsável e prudente, sob pena do acionamento de obrigações contratualmente previstas por perda ou deterioração dos bens e equipamentos;")], spacing: { after: 200 }, alignment: "both" }),
+      new Paragraph({ children: [new TextRun("6.\tA instalação de programas ou aplicações informáticas (software) no equipamento cedido, deve ser feita exclusivamente para fins do processo de ensino e aprendizagem;")], spacing: { after: 200 }, alignment: "both" }),
+      new Paragraph({ children: [new TextRun("7.\tA instalação ou remoção de partes ou componentes (hardware) do equipamento é expressamente proibida;")], spacing: { after: 200 }, alignment: "both" }),
+      new Paragraph({ children: [new TextRun("8.\tO Encarregado de Educação/Aluno está autorizado a deslocar os equipamentos para fora da morada da sua residência ou domicílio indicada neste auto de entrega, exclusivamente para fins relacionados com o processo de ensino e aprendizagem e bem assim nas situações em que sejam previamente autorizados pelo Ministério da Educação ou pelo/a Diretor(a) do AE/EnA;")], spacing: { after: 200 }, alignment: "both" }),
+      new Paragraph({ children: [new TextRun("9.\tO Encarregado de Educação subcessionário obriga-se a comunicar imediatamente ao Escola Secundária D. João II, Setúbal a perda ou o roubo dos bens ou equipamentos;")], spacing: { after: 200 }, alignment: "both" }),
+      new Paragraph({ children: [new TextRun("10.\tO Encarregado de Educação subcessionário obriga-se, ainda, a suportar todas as despesas devidas pela recuperação dos bens ou equipamentos sempre que os danos advenham de mau uso ou negligência na sua conservação;")], spacing: { after: 200 }, alignment: "both" }),
+      new Paragraph({ children: [new TextRun("11.\tÉ vedada ao Encarregado de Educação subcessionário a possibilidade de sub-comodatar ou locar os bens ou equipamentos objeto cedido a terceiros;")], spacing: { after: 200 }, alignment: "both" }),
+      new Paragraph({ children: [new TextRun("12.\tEm tudo o que não consta nos pontos anteriores, são aplicáveis à presente cedência de equipamentos para o acesso e a utilização de recursos didáticos e educativos digitais, as disposições constantes dos artigos 1129.º a 1137.º do Código Civil, relativas ao contrato de comodato.")], spacing: { after: 400 }, alignment: "both" }),
       new Paragraph({ children: [new TextRun({ text: "TRATAMENTO DE DADOS PESSOAIS, DECLARAÇÃO DE CONSENTIMENTO E EXERCÍCIO DE DIREITOS", bold: true, size: 24 })], spacing: { after: 200 } }),
       new Paragraph({ children: [new TextRun("13.\tO tratamento de dados pessoais é realizado no âmbito da Medida «Universalização da Escola Digital», com base na gestão da relação contratual, para efeitos de gestão da entrega dos equipamentos informáticos, de acordo com os termos e condições da Política de Proteção de Dados acessível em https://registoequipamento.escoladigital.min-educ.pt.")], spacing: { after: 200 } }),
       new Paragraph({ children: [new TextRun("14.\tO Encarregado de Educação, sendo titular dos dados pessoais constantes do presente auto de entrega de bens ou equipamentos informáticos autoriza expressamente a que os mesmos sejam objeto de recolha, utilização, registo e tratamento, ao abrigo da alínea a) do n.º1 do art.6.º do Regulamento Geral sobre Proteção de Dados (RGPD), para efeitos de monitorização, verificação, controlo e avaliação no quadro da implementação dos Fundos Europeus Estruturais e de Investimento (FEEI) e respetivo reporte à Comissão Europeia e restantes entidades envolvidas, no âmbito dos respetivos projetos comunitários financiadores e sempre que solicitado pelas autoridades nacionais e comunitárias legalmente competentes, no âmbito das quais também podem ser solicitados comprovativos de matrícula e da condição")], spacing: { after: 100 } }),
