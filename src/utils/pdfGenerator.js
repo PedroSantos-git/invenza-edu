@@ -182,7 +182,7 @@ export async function gerarPDFEmprestimo(emprestimo, templates = [], currentUser
   let cabecalhoEntrega = '';
   if (isAluno) {
     cabecalhoEntrega = `
-Auto de Entrega nº {{uuid}}
+Auto de Entrega nº ${emprestimo.id}
 
 No dia ${formatDataHora().split(' às ')[0]}, às ${formatDataHora().split(' às ')[1]}, na Escola Secundária D. João II, Setúbal, sita na R. Dr. Luís Macedo e Castro 2914-510 SETÚBAL procedeu-se à entrega temporária e gratuita dos bens e equipamentos informáticos, abaixo descritos a:
 
@@ -190,7 +190,7 @@ ${pessoa?.ee_nome || '—'}, Encarregado de Educação, com o NIF ${pessoa?.ee_n
 `;
   } else {
     cabecalhoEntrega = `
-Auto de Entrega: nº {{uuid}}
+Auto de Entrega: nº ${emprestimo.id}
 
 
 No dia ${formatDataHora().split(' às ')[0]}, às ${formatDataHora().split(' às ')[1]}, na Escola Secundária D. João II, Setúbal, sita na R. Dr. Luís Macedo e Castro 2914-510 SETÚBAL procedeu-se à entrega temporária e gratuita dos bens e equipamentos informáticos, abaixo descritos a:
