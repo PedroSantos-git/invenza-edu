@@ -176,44 +176,54 @@ export const DocxProcessor = {
   },
 
   /**
-   * Generates a barcode as a Base64 PNG string
+   * Generates a barcode as a base64 image using a public API
    */
   async generateBarcode(text) {
     if (!text || text === '—') return TRANSPARENT_PIXEL;
     try {
-      const canvas = document.createElement('canvas');
-      JsBarcode(canvas, text, {
-        format: "CODE128",
-        width: 2,
-        height: 40,
-        displayValue: true
+      // Using bwip-js online API for simplicity and quality
+      const url = `https://bwipjs-api.metafloor.com/?bcid=code128&text=${encodeURIComponent(text)}&scale=2&rotate=N&includetext=true`;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('API failed');
+      const blob = await response.blob();
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const base64 = reader.result.split(',')[1];
+          resolve(base64);
+        };
+        reader.readAsDataURL(blob);
       });
-      return canvas.toDataURL('image/png').split(',')[1];
     } catch (err) {
-      console.error('Error generating barcode:', err);
+      console.error('Error generating barcode via API:', err);
       return TRANSPARENT_PIXEL;
     }
   },
 
   /**
-   * Converts HTML to PDF using html2canvas + jsPDF (faster and multi-page)
+   * Converts HTML to PDF using html2canvas + jsPDF (reliable and multi-page)
    */
   async htmlToPdf(htmlContent, filename) {
-    console.log('Starting optimized PDF generation for:', filename);
+    console.log('Starting reliable PDF generation for:', filename);
     
     const container = document.createElement('div');
-    container.style.width = '750px'; // Optimization: smaller width for faster capture
+    container.style.width = '800px';
     container.style.padding = '40px';
-    container.style.position = 'fixed';
-    container.style.left = '0';
+    container.style.position = 'absolute';
+    container.style.left = '-9999px';
     container.style.top = '0';
-    container.style.zIndex = '-9999';
     container.style.backgroundColor = 'white';
     container.style.color = 'black';
-    container.style.opacity = '0.001';
-    container.style.pointerEvents = 'none';
     container.style.fontFamily = 'Arial, sans-serif';
-    container.innerHTML = htmlContent;
+    container.innerHTML = `
+      <style>
+        .pdf-content { font-family: Arial, sans-serif; line-height: 1.5; color: black; }
+        .pdf-content table { border-collapse: collapse; width: 100%; }
+        .pdf-content td, .pdf-content th { border: 1px solid #ccc; padding: 8px; }
+        .pdf-content img { max-width: 100%; height: auto; }
+      </style>
+      <div class="pdf-content">${htmlContent}</div>
+    `;
     document.body.appendChild(container);
 
     try {
@@ -224,22 +234,27 @@ export const DocxProcessor = {
         return new Promise(resolve => {
           img.onload = resolve;
           img.onerror = resolve;
-          setTimeout(resolve, 2000); // Safety timeout
+          setTimeout(resolve, 3000); // Safety timeout
         });
       }));
 
-      // Use html2canvas directly for better control
+      // Give extra time for rendering
+      await new Promise(resolve => setTimeout(resolve, 500));
+
       const canvas = await html2canvas(container, {
-        scale: 1.5, // Balance between quality and speed
+        scale: 2,
         useCORS: true,
         logging: false,
         backgroundColor: '#ffffff',
-        width: 750,
+        width: 800,
         height: container.scrollHeight,
-        removeContainer: true
+        onclone: (clonedDoc) => {
+          const clonedElement = clonedDoc.body.querySelector('div');
+          if (clonedElement) clonedElement.style.left = '0';
+        }
       });
 
-      const imgData = canvas.toDataURL('image/jpeg', 0.85); // JPEG is much faster and smaller
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
