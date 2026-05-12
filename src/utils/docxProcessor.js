@@ -6,6 +6,8 @@ import mammoth from 'mammoth';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import { Document, Packer, Paragraph, TextRun, ImageRun, Header, Footer, WidthType } from 'docx';
+const TRANSPARENT_PIXEL = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+
 /**
  * Utility to handle native DOCX templates
  */
@@ -45,6 +47,7 @@ export const DocxProcessor = {
    * Generates HTML preview from DOCX Base64
    */
   async getHtmlFromBase64(base64) {
+    if (!base64) return '';
     try {
       const binaryString = atob(base64);
       const bytes = new Uint8Array(binaryString.length);
@@ -77,12 +80,13 @@ export const DocxProcessor = {
       const opts = {
         centered: false,
         getImage(tagValue) {
-          if (!tagValue || typeof tagValue !== 'string' || tagValue === '—') return null;
+          // Fallback to transparent pixel if no value
+          if (!tagValue || typeof tagValue !== 'string' || tagValue === '—' || tagValue === '') {
+            return new Uint8Array(atob(TRANSPARENT_PIXEL).split("").map(c => c.charCodeAt(0)));
+          }
+          
           try {
-            // Check if it's a valid base64 image string
             const base64Data = tagValue.includes('base64,') ? tagValue.split(',')[1] : tagValue;
-            if (!base64Data || base64Data.length < 10) return null;
-            
             const binaryString = atob(base64Data);
             const bytes = new Uint8Array(binaryString.length);
             for (let i = 0; i < binaryString.length; i++) {
@@ -91,11 +95,13 @@ export const DocxProcessor = {
             return bytes;
           } catch (e) {
             console.warn('Failed to process image tag:', e);
-            return null;
+            return new Uint8Array(atob(TRANSPARENT_PIXEL).split("").map(c => c.charCodeAt(0)));
           }
         },
         getSize(img, tagValue, tagName) {
-          return [150, 50]; // [width, height] in pixels
+          // If it's the transparent pixel, make it tiny
+          if (tagValue === TRANSPARENT_PIXEL || !tagValue || tagValue === '—') return [1, 1];
+          return [150, 50]; // Default [width, height] in pixels
         }
       };
       const imageModule = new ImageModule(opts);
@@ -111,7 +117,6 @@ export const DocxProcessor = {
         parser: (tag) => {
           return {
             get(scope) {
-              // Extremely robust scope check
               if (scope === null || scope === undefined) return '';
               
               const isImageTag = tag.startsWith('%');
@@ -119,20 +124,18 @@ export const DocxProcessor = {
               
               let value = '';
               try {
-                // Safe access to scope
-                if (typeof scope === 'object') {
+                if (scope && typeof scope === 'object') {
                   value = scope[cleanTag] ?? scope[tag] ?? '';
                 } else {
-                  value = scope;
+                  value = scope ?? '';
                 }
-              } catch (e) {
-                console.warn(`Error accessing tag ${tag}:`, e);
+              } catch (e) { 
                 value = '';
               }
               
-              // If it's an image tag and we have no value, return null to let ImageModule skip it
+              // If it's an image tag and we have no value, return the transparent pixel string
               if (isImageTag && (!value || value === '—' || value === '')) {
-                return null; 
+                return TRANSPARENT_PIXEL; 
               }
               
               if (typeof value === 'string' && value.startsWith('BOLD:')) {
@@ -145,10 +148,8 @@ export const DocxProcessor = {
         }
       });
 
-      // Ensure data is an object
       const safeData = data && typeof data === 'object' ? data : {};
 
-      // Use try-catch for the render process
       try {
         doc.render(safeData);
       } catch (error) {
@@ -175,78 +176,96 @@ export const DocxProcessor = {
   },
 
   /**
-   * Generates a barcode as a base64 image using a public API
+   * Generates a barcode as a Base64 PNG string
    */
   async generateBarcode(text) {
-    if (!text) return null;
+    if (!text || text === '—') return TRANSPARENT_PIXEL;
     try {
-      // Using bwip-js online API for simplicity and quality
-      const url = `https://bwipjs-api.metafloor.com/?bcid=code128&text=${encodeURIComponent(text)}&scale=2&rotate=N&includetext=true`;
-      const response = await fetch(url);
-      const blob = await response.blob();
-      return new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result);
-        reader.readAsDataURL(blob);
+      const canvas = document.createElement('canvas');
+      JsBarcode(canvas, text, {
+        format: "CODE128",
+        width: 2,
+        height: 40,
+        displayValue: true
       });
+      return canvas.toDataURL('image/png').split(',')[1];
     } catch (err) {
       console.error('Error generating barcode:', err);
-      return null;
+      return TRANSPARENT_PIXEL;
     }
   },
 
   /**
-   * Converts HTML to PDF using native jsPDF html engine (fast and searchable)
+   * Converts HTML to PDF using html2canvas + jsPDF (faster and multi-page)
    */
   async htmlToPdf(htmlContent, filename) {
-    console.log('Starting native PDF generation for:', filename);
+    console.log('Starting optimized PDF generation for:', filename);
     
-    // Create a temporary visible but off-screen container
     const container = document.createElement('div');
-    container.style.width = '190mm'; // Standard A4 width minus margins
-    container.style.padding = '0';
-    container.style.position = 'absolute';
-    container.style.left = '-10000px';
+    container.style.width = '750px'; // Optimization: smaller width for faster capture
+    container.style.padding = '40px';
+    container.style.position = 'fixed';
+    container.style.left = '0';
     container.style.top = '0';
+    container.style.zIndex = '-9999';
     container.style.backgroundColor = 'white';
     container.style.color = 'black';
-    container.style.fontSize = '11pt';
-    container.style.lineHeight = '1.4';
+    container.style.opacity = '0.001';
+    container.style.pointerEvents = 'none';
+    container.style.fontFamily = 'Arial, sans-serif';
     container.innerHTML = htmlContent;
     document.body.appendChild(container);
 
     try {
-      // Ensure images are loaded
+      // Wait for images to load
       const images = container.getElementsByTagName('img');
       await Promise.all(Array.from(images).map(img => {
         if (img.complete) return Promise.resolve();
         return new Promise(resolve => {
           img.onload = resolve;
           img.onerror = resolve;
+          setTimeout(resolve, 2000); // Safety timeout
         });
       }));
 
-      const pdf = new jsPDF({
-        orientation: 'p',
-        unit: 'mm',
-        format: 'a4',
-        hotfixes: ['px_scaling']
+      // Use html2canvas directly for better control
+      const canvas = await html2canvas(container, {
+        scale: 1.5, // Balance between quality and speed
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+        width: 750,
+        height: container.scrollHeight,
+        removeContainer: true
       });
 
-      await pdf.html(container, {
-        callback: function (doc) {
-          doc.save(filename || 'documento.pdf');
-        },
-        x: 10,
-        y: 10,
-        width: 190,
-        windowWidth: 800, // Optimize rendering width
-        autoPaging: 'text'
-      });
+      const imgData = canvas.toDataURL('image/jpeg', 0.85); // JPEG is much faster and smaller
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
       
+      const imgWidth = pageWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      // Add first page
+      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      // Add subsequent pages if needed
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      pdf.save(filename || 'documento.pdf');
       console.log('PDF saved successfully');
     } catch (err) {
-      console.error('Error in native htmlToPdf:', err);
+      console.error('Error in htmlToPdf:', err);
       throw err;
     } finally {
       if (document.body.contains(container)) {
