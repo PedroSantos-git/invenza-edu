@@ -1214,14 +1214,6 @@ export default function Emprestimos() {
                 <Button variant="outline" size="sm" onClick={() => { gerarPDFEmprestimo(detailItem, pdfTemplates, user); }}>
                   <FileDown className="w-4 h-4 mr-1" />PDF (Template)
                 </Button>
-                {(() => {
-                  const pessoa = pessoas.find(p => p.id === detailItem.pessoa_id);
-                  return pessoa?.tipo === 'Aluno' && (
-                    <Button size="sm" onClick={() => { gerarPDFEmprestimoDiretoAluno(detailItem, user); }}>
-                      <FileDown className="w-4 h-4 mr-1" />PDF Direto
-                    </Button>
-                  );
-                })()}
               </div>
             </div>
           </DialogContent>
