@@ -460,7 +460,7 @@ export async function prepareLoanVars(emprestimo, pessoa, eq, kitItems, currentU
         'a exercer funções letivas no Escola Secundária D. João II, Setúbal',
         pessoa?.morada ? `e residente em ${pessoa.morada}` : '',
         pessoa?.nif ? `com o NIF ${pessoa.nif}` : '',
-        pessoa?.cc_numero ? `titular do Cartão de cidadão n.º ${pessoa.cc_numero}` : ''
+        pessoa?.cc_numero ? `titular do Cartão de Cidadão n.º ${pessoa.cc_numero}` : ''
       ].filter(Boolean).join(', ');
 
       cabecalhoDevolucao = `No dia ${dataParte}, às ${horaParte}, na Escola Secundária D. João II, Setúbal, procedeu-se à recolha e receção dos bens e equipamentos informáticos, abaixo descritos e que estavam na posse de:\n\n${infoDocente}, conforme auto de entrega nº ${emprestimo.id}.`;
