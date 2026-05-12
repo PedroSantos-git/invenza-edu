@@ -435,16 +435,15 @@ export async function prepareLoanVars(emprestimo, pessoa, eq, kitItems, currentU
     cabecalhoEntrega = `Auto de Entrega nº ${emprestimo.id}\n\nNo dia ${dataParte}, às ${horaParte}, na Escola Secundária D. João II, Setúbal, sita na R. Dr. Luís Macedo e Castro 2914-510 SETÚBAL procedeu-se à entrega temporária e gratuita dos bens e equipamentos informáticos, abaixo descritos a:\n\n${infoDocente}.`;
   }
 
-  // Final validation of vars object to ensure no null values reach the template engine
-  const vars = {
-    equipamento: eq?.designacao || emprestimo.equipamento_info || '—',
-    pessoa: pessoa?.nome || emprestimo.pessoa_info || '—',
+  return {
+    equipamento: eq?.designacao || (isBorrow ? emprestimo.equipamento_info : emprestimo.equipamento_info) || '—',
+    pessoa: pessoa?.nome || (isBorrow ? emprestimo.pessoa_info : emprestimo.pessoa_info) || '—',
     numero_aluno: isAluno ? (pessoa?.nif || '—') : '—',
     numero_docente: !isAluno ? (pessoa?.nif || '—') : '—',
-    data_emprestimo: formatDate(emprestimo.data_emprestimo),
+    data_emprestimo: formatDate(isBorrow ? emprestimo.data_emprestimo : emprestimo.data_emprestimo),
     data_devolucao: isBorrow ? '—' : formatDate(emprestimo.data_devolucao),
     estado_equipamento: isBorrow ? '—' : (emprestimo.estado_equipamento || '—'),
-    notas_entrega: emprestimo.notas_entrega || '—',
+    notas_entrega: isBorrow ? (emprestimo.notas_entrega || '—') : '—',
     notas: isBorrow ? (emprestimo.notas_entrega || '—') : (emprestimo.notas || '—'),
     acessorios: isBorrow ? formatAcessorios(emprestimo.acessorios_entregues) : formatAcessorios(emprestimo.acessorios_devolvidos),
     acessorios_devolvidos: isBorrow ? '—' : formatAcessorios(emprestimo.acessorios_devolvidos),
@@ -459,10 +458,13 @@ export async function prepareLoanVars(emprestimo, pessoa, eq, kitItems, currentU
     data_hora: dataHoraStr || '—',
     ee_nome: pessoa?.ee_nome || '—',
     ee_nif: pessoa?.ee_nif || '—',
+    ee_cc: pessoa?.ee_cc || '—',
     nome_aluno: isAluno ? (pessoa?.nome || '—') : '—',
     nif_aluno: isAluno ? (pessoa?.nif || '—') : '—',
     numero_processo_aluno: isAluno ? (pessoa?.n_processo || '—') : '—',
     turma_aluno: isAluno ? (pessoa?.turma || '—') : '—',
+    morada_pessoa: pessoa?.morada || '—',
+    cc_pessoa: pessoa?.cc_numero || '—',
     nome_docente: !isAluno ? (pessoa?.nome || '—') : '—',
     nif_docente: !isAluno ? (pessoa?.nif || '—') : '—',
     cabecalho_entrega: cabecalhoEntrega || '—',
@@ -478,8 +480,6 @@ export async function prepareLoanVars(emprestimo, pessoa, eq, kitItems, currentU
     equipamento_secao_a: equipmentSections?.find(s => s.letter === 'A')?.content || '',
     equipamento_secao_b: equipmentSections?.find(s => s.letter === 'B')?.content || ''
   };
-
-  return vars;
 }
 
 export async function gerarPDFEmprestimo(emprestimo, templates = [], currentUser = null, format = null) {
