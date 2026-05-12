@@ -116,13 +116,23 @@ export default function RichTextEditor({
             height,
             menubar,
             readonly: false, 
-            plugins,
-            toolbar,
+            plugins: [
+              'anchor', 'autolink', 'charmap', 'codesample', 'emoticons', 'link', 'lists', 'media', 'searchreplace', 'table', 'visualblocks', 'wordcount',
+              'checklist', 'mediaembed', 'casechange', 'formatpainter', 'pageembed', 'a11ychecker', 'tinymcespellchecker', 'permanentpen', 'powerpaste', 'advtable', 'advcode', 'advtemplate', 'typography', 'inlinecss', 'markdown', 'importword', 'exportword', 'exportpdf'
+            ],
+            toolbar: toolbar || 'undo redo | blocks fontfamily fontsize | bold italic underline strikethrough | link media table | align lineheight | checklist numlist bullist indent outdent | emoticons charmap | removeformat',
             content_style: 'body { font-family:Helvetica,Arial,sans-serif; font-size:14px; padding: 20px; }',
             language: 'pt-PT',
             branding: false,
             promotion: false,
-            placeholder
+            placeholder,
+            tinycomments_mode: 'embedded',
+            tinycomments_author: 'Admin',
+            mergetags_list: [
+              { value: 'pessoa', title: 'Nome da Pessoa' },
+              { value: 'equipamento', title: 'Equipamento' },
+              { value: 'data_hoje', title: 'Data de Hoje' }
+            ]
           }}
           value={value}
           onEditorChange={(content) => onChange(content)}
