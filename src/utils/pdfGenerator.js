@@ -230,7 +230,7 @@ export async function gerarPDFEmprestimoDiretoAluno(emprestimo, currentUser = nu
   y += 5;
   
   // Person info
-  const pessoaText = `${pessoa?.ee_nome || '—'}, Encarregado de Educação, com o NIF ${pessoa?.ee_nif || '—'}, do aluno ${pessoa?.nome || '—'}, nº de processo ${pessoa?.n_processo || '—'} matriculado na Escola Secundária D. João II, Setúbal, a frequentar o ${pessoa?.turma || '—'} ano, com o NIF ${pessoa?.nif || '—'}.`;
+  const pessoaText = `${pessoa?.ee_nome || '—'}, Encarregado de Educação, com o NIF ${pessoa?.ee_nif || '—'}, do aluno ${pessoa?.nome || '—'}, nº de processo ${pessoa?.n_processo || '—'} matriculado na Escola Secundária D. João II, Setúbal, a frequentar o ${pessoa?.turma || '—'}, com o NIF ${pessoa?.nif || '—'}.`;
   addText(pessoaText);
   y += 10;
   
@@ -409,7 +409,7 @@ Auto de Entrega nº ${emprestimo.id}
 
 No dia ${formatDataHora().split(' às ')[0]}, às ${formatDataHora().split(' às ')[1]}, na Escola Secundária D. João II, Setúbal, sita na R. Dr. Luís Macedo e Castro 2914-510 SETÚBAL procedeu-se à entrega temporária e gratuita dos bens e equipamentos informáticos, abaixo descritos a:
 
-${pessoa?.ee_nome || '—'}, Encarregado de Educação, com o NIF ${pessoa?.ee_nif || '—'}, do aluno ${pessoa?.nome || '—'}, nº de processo ${pessoa?.n_processo || '—'} matriculado na Escola Secundária D. João II, Setúbal, a frequentar o ${pessoa?.turma || '—'} ano, com o NIF ${pessoa?.nif || '—'}.
+${pessoa?.ee_nome || '—'}, Encarregado de Educação, com o NIF ${pessoa?.ee_nif || '—'}, do aluno ${pessoa?.nome || '—'}, nº de processo ${pessoa?.n_processo || '—'} matriculado na Escola Secundária D. João II, Setúbal, a frequentar o ${pessoa?.turma || '—'}, com o NIF ${pessoa?.nif || '—'}.
 `;
   } else {
     cabecalhoEntrega = `

@@ -234,9 +234,21 @@ export const DocxProcessor = {
         ],
         spacing: { after: 200 }
       }),
-      new Paragraph({ children: [new TextRun("[[cabecalho_entrega]]")], spacing: { after: 200 } }),
-      new Paragraph({ children: [new TextRun("São cedidos a título gratuito, com a obrigação de restituição, os seguintes equipamentos:")], spacing: { after: 200 } }),
-      new Paragraph({ children: [new TextRun("[[equipamento_secoes]]")], spacing: { after: 400 } }),
+      new Paragraph({ 
+        children: [new TextRun("[[cabecalho_entrega]]")], 
+        spacing: { after: 200 },
+        alignment: "center"
+      }),
+      new Paragraph({ 
+        children: [new TextRun("São cedidos a título gratuito, com a obrigação de restituição, os seguintes equipamentos:")], 
+        spacing: { after: 200 },
+        alignment: "center"
+      }),
+      new Paragraph({ 
+        children: [new TextRun("[[equipamento_secoes]]")], 
+        spacing: { after: 400 },
+        alignment: "center"
+      }),
       new Paragraph({ children: [new TextRun({ text: "CONDIÇÕES GERAIS", bold: true, size: 24 })], spacing: { after: 200 } }),
       new Paragraph({ children: [new TextRun("1.\tOs equipamentos cedidos destinam-se a ser utilizados, exclusivamente, para fins do processo de ensino e aprendizagem do Aluno, com início em 04/5/2026 e término na data de conclusão do ciclo de estudos que o Aluno frequenta no momento da cedência, nomeadamente, nas seguintes situações:")], spacing: { after: 200 } }),
       new Paragraph({ children: [new TextRun("\ta.\tQuando os alunos tenham completado o ciclo ou nível de ensino a que se destinam os equipamentos a fornecer ou a escolaridade obrigatória (no final do 4º, 9º ou 12º ano);")], spacing: { after: 100 } }),
