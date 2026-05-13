@@ -252,31 +252,60 @@ export default function Devolucoes() {
 
       // 2. Processar Avaria e Estados para TODOS os itens do kit
       for (const item of kitItems) {
-        // Atualizar estado do equipamento
+        const isMain = item.id === mainEq.id;
+
+        // O estado do equipamento principal já é atualizado pelo trigger after_insert_devolucao na DB,
+        // mas fazemos o update aqui para garantir consistência e tratar os outros itens do kit.
         const novoEstadoEq = estadoEquipamento === 'OK' ? 'Recondicionamento' : 'Manutenção';
         await db.entities.Equipamento.update(item.id, { estado: novoEstadoEq });
 
-        // Se for avaria, criar uma para cada item (ou apenas para o principal? o utilizador disse conjunto vai para a mesma avaria)
-        // Vamos criar uma avaria por item para rastreio técnico individual, mas marcadas como conjunto
+        // Se for avaria, processar para cada item
         if (estadoEquipamento !== 'OK') {
-          const { data: maxAvaria } = await db.client.from('avarias').select('numero_avaria').order('numero_avaria', { ascending: false }).limit(1).maybeSingle();
-          const nextNumero = maxAvaria?.numero_avaria ? maxAvaria.numero_avaria + 1 : 1001;
-          
-          await db.entities.Avaria.create({
-            numero_avaria: nextNumero,
-            equipamento_id: item.id,
-            equipamento_info: `${item.tipo} ${item.marca} ${item.modelo}`.trim() || item.designacao,
-            origem: 'DEVOLUÇÃO',
-            devolucao_id: devolucao.id,
-            estado: 'A REVER',
-            diagnostico: kitItems.length > 1 ? `Avaria de conjunto (Imob: ${imob})` : 'A rever...',
-            componentes: { 
-              ecra: 'DESCONHECIDO', disco: 'DESCONHECIDO', ram: 'DESCONHECIDO', 
-              board: 'DESCONHECIDO', bateria: 'DESCONHECIDO', ventoinha: 'DESCONHECIDO',
-              teclado: 'DESCONHECIDO', touchpad: 'DESCONHECIDO' 
-            },
-            historico_estados: [{ tipo: 'estado', estado_novo: 'A REVER', data: new Date().toISOString(), utilizador: 'Sistema (Devolução Conjunto)' }]
-          });
+          if (isMain) {
+            // O equipamento principal JÁ TEM uma avaria criada pelo trigger after_insert_devolucao.
+            // Vamos apenas atualizar essa avaria com informações extra se necessário.
+            const { data: existingAvaria } = await db.client
+              .from('avarias')
+              .select('id')
+              .eq('devolucao_id', devolucao.id)
+              .eq('equipamento_id', item.id)
+              .maybeSingle();
+
+            if (existingAvaria) {
+              await db.entities.Avaria.update(existingAvaria.id, {
+                diagnostico: kitItems.length > 1 ? `Avaria de conjunto (Imob: ${imob})` : 'A rever...',
+                historico_estados: [{ 
+                  tipo: 'estado', 
+                  estado_novo: 'A REVER', 
+                  data: new Date().toISOString(), 
+                  utilizador: 'Sistema (Devolução Conjunto - Detalhes)' 
+                }]
+              });
+            }
+          } else {
+            // Para itens secundários do kit, criamos uma nova avaria.
+            // NÃO enviamos numero_avaria para evitar conflitos de chave única, 
+            // deixando a base de dados gerir a numeração via trigger/sequence.
+            await db.entities.Avaria.create({
+              equipamento_id: item.id,
+              equipamento_info: `${item.tipo} ${item.marca} ${item.modelo}`.trim() || item.designacao,
+              origem: 'DEVOLUÇÃO',
+              devolucao_id: devolucao.id,
+              estado: 'A REVER',
+              diagnostico: `Avaria de conjunto (Imob: ${imob})`,
+              componentes: { 
+                ecra: 'DESCONHECIDO', disco: 'DESCONHECIDO', ram: 'DESCONHECIDO', 
+                board: 'DESCONHECIDO', bateria: 'DESCONHECIDO', ventoinha: 'DESCONHECIDO',
+                teclado: 'DESCONHECIDO', touchpad: 'DESCONHECIDO' 
+              },
+              historico_estados: [{ 
+                tipo: 'estado', 
+                estado_novo: 'A REVER', 
+                data: new Date().toISOString(), 
+                utilizador: 'Sistema (Devolução Conjunto)' 
+              }]
+            });
+          }
         }
       }
 

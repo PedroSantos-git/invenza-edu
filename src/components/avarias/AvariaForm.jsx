@@ -80,18 +80,7 @@ export default function AvariaForm({ open, onClose }) {
     mutationFn: async () => {
       const eqNome = `${selectedEq.tipo} ${selectedEq.marca} ${selectedEq.modelo}`.trim() || selectedEq.designacao;
       
-      // Obter o próximo número de avaria (max + 1)
-      const { data: maxAvaria } = await db.client
-        .from('avarias')
-        .select('numero_avaria')
-        .order('numero_avaria', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      const nextNumero = maxAvaria?.numero_avaria ? maxAvaria.numero_avaria + 1 : 1001;
-
       const avariaPayload = {
-        numero_avaria: nextNumero,
         equipamento_id: selectedEq.id,
         equipamento_info: eqNome,
         origem: 'DIRETA',
