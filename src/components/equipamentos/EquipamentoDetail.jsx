@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { db } from '@/api/db';
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Pencil, Monitor, FileText, Eye, Box } from 'lucide-react';
@@ -61,7 +61,7 @@ export default function EquipamentoDetail({ open, onClose, equipamento, onEdit, 
             </DialogTitle>
             <Button variant="outline" size="sm" onClick={onEdit}><Pencil className="w-3 h-3 mr-2" />Editar</Button>
           </div>
-          <p className="text-xs text-muted-foreground mt-1">Histórico completo e especificações técnicas</p>
+          <DialogDescription className="text-xs text-muted-foreground mt-1">Histórico completo e especificações técnicas</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">

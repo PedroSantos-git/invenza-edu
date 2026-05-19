@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { db } from '@/api/db';
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import StatusBadge from '@/components/shared/StatusBadge';
 import { format } from 'date-fns';
@@ -34,7 +34,10 @@ export default function PessoaDetail({ open, onClose, pessoa }) {
     <>
       <Dialog open={open} onOpenChange={onClose}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Ficha de Pessoa</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Ficha de Pessoa</DialogTitle>
+            <DialogDescription>Informações detalhadas, histórico de empréstimos e comunicações enviadas.</DialogDescription>
+          </DialogHeader>
           <div className="space-y-6">
             <div className="flex items-center gap-4">
               {pessoa.foto ? (

@@ -546,7 +546,10 @@ export default function Devolucoes() {
       {/* Return dialog */}
       <Dialog open={formOpen} onOpenChange={v => { if (!v) resetForm(); }}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Nova Devolução</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Nova Devolução</DialogTitle>
+            <DialogDescription>Regista a devolução de um equipamento ao armazém.</DialogDescription>
+          </DialogHeader>
 
           {step === 1 && (
             <div className="space-y-5">

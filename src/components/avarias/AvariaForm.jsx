@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { db } from '@/api/db';
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -120,7 +120,10 @@ export default function AvariaForm({ open, onClose }) {
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) handleClose(); }}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader><DialogTitle>Nova Avaria (Direta)</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle>Registar Avaria</DialogTitle>
+          <DialogDescription>Cria uma nova ficha de avaria para um equipamento.</DialogDescription>
+        </DialogHeader>
         <div className="space-y-5">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">

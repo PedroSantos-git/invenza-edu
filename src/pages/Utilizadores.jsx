@@ -4,7 +4,7 @@ import { db } from '@/api/db';
 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -140,7 +140,10 @@ export default function Utilizadores() {
 
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Adicionar Utilizador</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Adicionar Utilizador</DialogTitle>
+            <DialogDescription>Concede acesso ao sistema através de um email do Google.</DialogDescription>
+          </DialogHeader>
           <div className="space-y-4 pt-2">
             <div className="space-y-2">
               <Label>Email do Google</Label>

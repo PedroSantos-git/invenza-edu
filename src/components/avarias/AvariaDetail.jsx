@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { db } from '@/api/db';
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -170,6 +170,7 @@ export default function AvariaDetail({ open, onClose, avaria }) {
                 <p className="text-xs font-mono font-bold text-muted-foreground uppercase tracking-wider">#{avaria.numero_avaria?.toString().padStart(4, '0') || '—'}</p>
                 <DialogTitle>Avaria — {avaria.equipamento_info || 'Equipamento'}</DialogTitle>
               </div>
+              <DialogDescription className="sr-only">Detalhes e histórico da avaria registada.</DialogDescription>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={() => setShowEquipDetail(true)}>
                   <History className="w-4 h-4 mr-1" />Histório Equipamento

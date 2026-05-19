@@ -2,7 +2,7 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { db } from '@/api/db';
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { 
@@ -68,6 +68,7 @@ export default function PedidoDetail({ open, onClose, pedido }) {
               <p className="text-sm font-bold">{safeFormat(pedido.data_pedido)}</p>
             </div>
           </div>
+          <DialogDescription>Detalhes do pedido de equipamento e histórico de atribuição.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-8 mt-4">

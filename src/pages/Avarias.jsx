@@ -640,6 +640,7 @@ export default function Avarias() {
               <Ban className="w-5 h-5 text-red-600" />
               Pesquisar Equipamentos Inutilizados
             </DialogTitle>
+            <DialogDescription>Filtra equipamentos marcados como inutilizados com base no estado dos seus componentes.</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-6 pt-4">

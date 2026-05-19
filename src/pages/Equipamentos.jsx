@@ -5,7 +5,7 @@ import { db } from '@/api/db';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
@@ -77,9 +77,12 @@ export default function Equipamentos() {
   const todosOsTipos = [...new Set([...tiposAtivos.map(t => t.nome), ...equipamentos.map(e => e.tipo).filter(Boolean)])];
 
   const saveMutation = useMutation({
-    mutationFn: (data) => selected?.id
-      ? db.entities.Equipamento.update(selected.id, data)
-      : db.entities.Equipamento.create(data),
+    mutationFn: (data) => {
+      const { id, created_at, updated_at, ...payload } = data;
+      return selected?.id
+        ? db.entities.Equipamento.update(selected.id, payload)
+        : db.entities.Equipamento.create(data);
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['equipamentos'] });
       setFormOpen(false);
@@ -254,6 +257,9 @@ export default function Equipamentos() {
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{selected?.id ? 'Editar Equipamento' : 'Novo Equipamento'}</DialogTitle>
+            <DialogDescription>
+              {selected?.id ? 'Altera os dados do equipamento no inventário.' : 'Adiciona um novo equipamento ao inventário.'}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
