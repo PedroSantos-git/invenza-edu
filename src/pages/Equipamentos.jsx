@@ -78,10 +78,23 @@ export default function Equipamentos() {
 
   const saveMutation = useMutation({
     mutationFn: (data) => {
-      const { id, created_at, updated_at, ...payload } = data;
+      // Colunas permitidas na tabela equipamentos
+      const allowedColumns = [
+        'numero_serie', 'numero_imobilizado', 'designacao', 'tipo', 
+        'marca', 'modelo', 'estado', 'situacao_armazem', 
+        'historico_armazem', 'notas', 'data_entrada', 'documentos'
+      ];
+
+      const payload = Object.keys(data)
+        .filter(key => allowedColumns.includes(key))
+        .reduce((obj, key) => {
+          obj[key] = data[key];
+          return obj;
+        }, {});
+
       return selected?.id
         ? db.entities.Equipamento.update(selected.id, payload)
-        : db.entities.Equipamento.create(data);
+        : db.entities.Equipamento.create(payload);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['equipamentos'] });

@@ -236,9 +236,26 @@ export default function Pessoas() {
   });
 
   const saveMutation = useMutation({
-    mutationFn: (data) => selected?.id
-      ? db.entities.Pessoa.update(selected.id, data)
-      : db.entities.Pessoa.create(data),
+    mutationFn: (data) => {
+      // Colunas permitidas na tabela pessoas
+      const allowedColumns = [
+        'nome', 'email', 'tipo', 'turma', 'nif', 'telefone', 'morada', 
+        'n_processo', 'escalao', 'email_pessoal', 'ee_nome', 'ee_tipo_doc', 
+        'ee_num_doc', 'ee_morada', 'ee_email', 'ee_nif', 'ee_telefone', 
+        'foto', 'ativo', 'grupo_recrutamento', 'qe', 'cc_numero'
+      ];
+
+      const payload = Object.keys(data)
+        .filter(key => allowedColumns.includes(key))
+        .reduce((obj, key) => {
+          obj[key] = data[key];
+          return obj;
+        }, {});
+
+      return selected?.id
+        ? db.entities.Pessoa.update(selected.id, payload)
+        : db.entities.Pessoa.create(payload);
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['pessoas'] });
       setFormOpen(false);
