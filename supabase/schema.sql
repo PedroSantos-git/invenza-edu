@@ -520,25 +520,6 @@ create trigger trg_before_insert_devolucao
 before insert on public.devolucoes
 for each row execute function public.before_insert_devolucao();
 
-create or replace function public.before_insert_avaria()
-returns trigger
-as $function$
-declare
-  v_next_num int;
-begin
-  if NEW.numero_avaria is null then
-    select coalesce(max(numero_avaria), 0) + 1 into v_next_num from public.avarias;
-    NEW.numero_avaria := v_next_num;
-  end if;
-  return NEW;
-end;
-$function$ language plpgsql;
-
-drop trigger if exists trg_before_insert_avaria on public.avarias;
-create trigger trg_before_insert_avaria
-before insert on public.avarias
-for each row execute function public.before_insert_avaria();
-
 create or replace function public.after_insert_devolucao()
 returns trigger
 as $function$
