@@ -323,8 +323,6 @@ export default function NotificacoesDevolucao() {
         <p><strong>Nota:</strong> Alunos que necessitem do equipamento para exames de 2.ª fase deverão efetuar a entrega a partir de setembro, deslocando-se à escola para o efeito.</p>
         <br />
         <p>Com os melhores cumprimentos,</p>
-        <p>Escola Secundária D. João II</p>
-        <p>Setúbal</p>
       </div>
     `;
 
@@ -342,7 +340,8 @@ export default function NotificacoesDevolucao() {
     }
 
     setAutoSending(true);
-    const newLog = [];
+    setAutoLog([]); // Clear log before sending
+    let currentIndex = 0;
 
     for (const student of studentsToSend) {
       const emailData = generateAutomatedEmail(student);
@@ -363,31 +362,33 @@ export default function NotificacoesDevolucao() {
           tipo: 'DEOLUCAO_KIT_2026'
         });
 
-        newLog.push({
+        setAutoLog(prev => [...prev, {
           aluno: student.nome,
           turma: student.turma,
           dataEnvio: new Date().toISOString(),
           status: 'enviado',
           email: to
-        });
+        }]);
       } catch (error) {
-        newLog.push({
+        setAutoLog(prev => [...prev, {
           aluno: student.nome,
           turma: student.turma,
           dataEnvio: new Date().toISOString(),
           status: 'erro',
           email: student.email || student.ee_email,
           erro: error.message
-        });
+        }]);
       }
+      
+      currentIndex++;
     }
 
-    setAutoLog(prev => [...newLog, ...prev]);
     setAutoSending(false);
     qc.invalidateQueries({ queryKey: ['email-historico'] });
     
-    const successCount = newLog.filter(l => l.status === 'enviado').length;
-    const errorCount = newLog.filter(l => l.status === 'erro').length;
+    const finalLog = autoLog;
+    const successCount = finalLog.filter(l => l.status === 'enviado').length;
+    const errorCount = finalLog.filter(l => l.status === 'erro').length;
     toast.success(`Envio concluído! ${successCount} enviados, ${errorCount} erros`);
   };
 
@@ -852,22 +853,45 @@ export default function NotificacoesDevolucao() {
               </div>
             </CardHeader>
             <CardContent>
-              {autoLog.length > 0 && (
-                <div className="mb-6 p-4 bg-muted rounded-lg border">
-                  <div className="text-sm font-semibold mb-2">Log de Envios</div>
-                  <div className="space-y-2 max-h-40 overflow-y-auto">
-                    {autoLog.map((log, idx) => (
-                      <div key={idx} className="flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-2">
-                          {log.status === 'enviado' ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : <XCircle className="w-4 h-4 text-red-500" />}
-                          <span className="font-medium">{log.aluno}</span>
-                          <span className="text-muted-foreground">({log.turma})</span>
+              {/* Progress Bar */}
+              {(autoSending || autoLog.length > 0) && (
+                <div className="mb-6 space-y-4">
+                  <div>
+                    <div className="flex items-center justify-between text-sm mb-2">
+                      <span className="font-semibold">
+                        {autoSending ? 'A enviar emails...' : 'Envio concluído'}
+                      </span>
+                      <span className="text-muted-foreground">
+                        {autoLog.length} / {autoSelectedStudents.length} emails processados
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2.5">
+                      <div 
+                        className="bg-primary h-2.5 rounded-full transition-all duration-300" 
+                        style={{
+                          width: `${(autoLog.length / Math.max(autoSelectedStudents.length, 1)) * 100}%`
+                        }}
+                      ></div>
+                    </div>
+                  </div>
+                  {/* Log */}
+                  <div className="p-4 bg-muted rounded-lg border">
+                    <div className="text-sm font-semibold mb-2">Log de Envios</div>
+                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                      {autoLog.map((log, idx) => (
+                        <div key={idx} className="flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-2">
+                            {log.status === 'enviado' ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : <XCircle className="w-4 h-4 text-red-500" />}
+                            <span className="font-medium">{log.aluno}</span>
+                            <span className="text-muted-foreground">({log.turma})</span>
+                            {log.erro && <span className="text-red-500">- {log.erro}</span>}
+                          </div>
+                          <span className="text-muted-foreground">
+                            {format(parseISO(log.dataEnvio), 'HH:mm:ss')}
+                          </span>
                         </div>
-                        <span className="text-muted-foreground">
-                          {format(parseISO(log.dataEnvio), 'HH:mm:ss')}
-                        </span>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 </div>
               )}
