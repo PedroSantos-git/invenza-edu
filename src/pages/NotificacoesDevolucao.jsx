@@ -12,11 +12,28 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Search, Mail, Loader2, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, Send, Filter, CheckCircle2, Eye, XCircle, Calendar } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Search, Mail, Loader2, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, Send, Filter, CheckCircle2, Eye, XCircle, Calendar, Users, Clock, AlertTriangle, RefreshCw } from 'lucide-react';
 import PageHeader from '@/components/shared/PageHeader';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
+import { format, parseISO, isSameDay, addDays } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
+
+// --- Schedule Configuration ---
+const SCHEDULE = [
+  // 9th Grade
+  { date: '2026-06-23', day: 'Terça-feira', turmas: ['9ºA', '9ºB'], location: 'Sala do PED', time: '9h30 às 12h' },
+  { date: '2026-06-24', day: 'Quarta-feira', turmas: ['9ºC', '9ºD'], location: 'Sala do PED', time: '9h30 às 12h' },
+  { date: '2026-06-25', day: 'Quinta-feira', turmas: ['9ºE', '9ºF'], location: 'Sala do PED', time: '9h30 às 12h' },
+  { date: '2026-06-26', day: 'Sexta-feira', turmas: ['9ºG', '9ºH', '9ºI'], location: 'Sala do PED', time: '9h30 às 12h' },
+  // 12th Grade
+  { date: '2026-06-29', day: 'Segunda-feira', turmas: ['12ºA', '12ºB'], location: 'Sala do PED', time: '9h30 às 12h' },
+  { date: '2026-06-30', day: 'Terça-feira', turmas: ['12ºC', '12ºD'], location: 'Sala do PED', time: '9h30 às 12h' },
+  { date: '2026-07-01', day: 'Quarta-feira', turmas: ['12ºE', '12ºF'], location: 'Sala do PED', time: '9h30 às 12h' },
+  { date: '2026-07-02', day: 'Quinta-feira', turmas: ['12ºG', '12ºH'], location: 'Sala do PED', time: '9h30 às 12h' },
+  { date: '2026-07-03', day: 'Sexta-feira', turmas: ['12ºI'], location: 'Sala do PED', time: '9h30 às 12h' }
+];
 
 export default function NotificacoesDevolucao() {
   const qc = useQueryClient();
@@ -34,6 +51,14 @@ export default function NotificacoesDevolucao() {
   const [selectedLoans, setSelectedLoans] = useState([]);
   const [motivoGeral, setMotivoGeral] = useState('Fim do período letivo / Cessação de funções');
   const [dataEntrega, setDataEntrega] = useState('');
+
+  // --- Automated Email Tab State ---
+  const [autoSelectedTurmas, setAutoSelectedTurmas] = useState([]);
+  const [autoSelectedStudents, setAutoSelectedStudents] = useState([]);
+  const [autoPreviewDialog, setAutoPreviewDialog] = useState(false);
+  const [autoPreviewStudent, setAutoPreviewStudent] = useState(null);
+  const [autoSending, setAutoSending] = useState(false);
+  const [autoLog, setAutoLog] = useState([]);
 
   // --- Preview tab state ---
   const [previewTipo, setPreviewTipo] = useState('aluno');
@@ -156,25 +181,166 @@ export default function NotificacoesDevolucao() {
     return Array.from(set).sort();
   }, [processedData]);
 
-  const handleSort = (key) => {
-    setSortConfig(prev => ({
-      key,
-      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
-    }));
+  // --- Process Data for Automated Tab ---
+  const automatedStudentsData = useMemo(() => {
+    if (!pessoas.length) return [];
+    
+    // Get students from the scheduled turmas
+    const allTurmas = SCHEDULE.flatMap(s => s.turmas);
+    const students = pessoas.filter(p => 
+      p.tipo === 'Aluno' && 
+      allTurmas.includes(p.turma) &&
+      (p.email || p.ee_email)
+    );
+
+    // Group by schedule entry
+    return students.map(student => {
+      const scheduleEntry = SCHEDULE.find(s => s.turmas.includes(student.turma));
+      return {
+        ...student,
+        schedule: scheduleEntry,
+        hasEmail: !!(student.email || student.ee_email),
+        hasAlunoEmail: !!student.email,
+        hasEeEmail: !!student.ee_email
+      };
+    }).sort((a, b) => (a.turma || '').localeCompare(b.turma || ''));
+  }, [pessoas]);
+
+  // --- Helper Functions for Automated Emails ---
+  const getTurmasWithSchedule = () => {
+    const turmaSet = new Set(SCHEDULE.flatMap(s => s.turmas));
+    return Array.from(turmaSet).sort();
   };
 
-  const toggleSelectAll = () => {
-    if (selectedLoans.length === processedData.length) {
-      setSelectedLoans([]);
+  const toggleTurmaSelection = (turma) => {
+    if (autoSelectedTurmas.includes(turma)) {
+      setAutoSelectedTurmas(prev => prev.filter(t => t !== turma));
     } else {
-      setSelectedLoans(processedData.map(d => d.id));
+      setAutoSelectedTurmas(prev => [...prev, turma]);
     }
   };
 
   const toggleSelect = (id) => {
-    setSelectedLoans(prev => 
-      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    setSelectedLoans(prev =>
+      prev.includes(id) ? prev.filter(itemId => itemId !== id) : [...prev, id]
     );
+  };
+
+  const toggleStudentSelection = (studentId) => {
+    if (autoSelectedStudents.includes(studentId)) {
+      setAutoSelectedStudents(prev => prev.filter(id => id !== studentId));
+    } else {
+      setAutoSelectedStudents(prev => [...prev, studentId]);
+    }
+  };
+
+  const selectAllStudentsInSelectedTurmas = () => {
+    const studentsInTurmas = automatedStudentsData
+      .filter(s => autoSelectedTurmas.includes(s.turma))
+      .map(s => s.id);
+    setAutoSelectedStudents(studentsInTurmas);
+  };
+
+  const generateAutomatedEmail = (student) => {
+    const schedule = SCHEDULE.find(s => s.turmas.includes(student.turma));
+    if (!schedule) return null;
+
+    const formattedDate = format(parseISO(schedule.date), 'dd/MM/yyyy');
+
+    const subject = `Devolução do Kit Informático – ${student.nome} – Turma ${student.turma} – ${formattedDate}`;
+
+    const body = `
+      <div style="font-family: sans-serif; line-height: 1.6; color: #333;">
+        <p>Exmo(a). Encarregado(a) de Educação,</p>
+        <p>Caro(a) ${student.nome},</p>
+        <br />
+        <p>Informamos que a devolução do Kit Informático para os alunos da turma ${student.turma} está agendada para o dia ${formattedDate} (${schedule.day}), entre as ${schedule.time}, na ${schedule.location}.</p>
+        <br />
+        <p>Deverão ser entregues os seguintes equipamentos:</p>
+        <ul>
+          <li>Computador</li>
+          <li>Transformador</li>
+          <li>Mochila</li>
+          <li>Cartão SIM (se aplicável)</li>
+          <li>Router + cabo de alimentação + carregador (se aplicável)</li>
+        </ul>
+        <br />
+        <p><strong>ATENÇÃO:</strong></p>
+        <ul style="color: #dc2626;">
+          <li>Retirar qualquer password ou PIN antes da entrega</li>
+          <li><strong>NÃO</strong> fazer reset nem apagar o PC (a escola procederá à limpeza total)</li>
+          <li>Só serão aceites <strong>ENTREGAS TOTAIS</strong>. Equipamentos em falta ou danificados serão substituídos a expensas do aluno/Encarregado de Educação.</li>
+        </ul>
+        <br />
+        <p><strong>Nota:</strong> Alunos que necessitem do equipamento para exames de 2.ª fase deverão efetuar a entrega a partir de setembro, deslocando-se à escola para o efeito.</p>
+        <br />
+        <p>Com os melhores cumprimentos,</p>
+        <p>Escola Secundária D. João II</p>
+        <p>Setúbal</p>
+      </div>
+    `;
+
+    return { subject, body, schedule };
+  };
+
+  const sendAutomatedEmails = async () => {
+    const studentsToSend = automatedStudentsData.filter(s => 
+      autoSelectedStudents.includes(s.id)
+    );
+
+    if (studentsToSend.length === 0) {
+      toast.warning('Selecione pelo menos um aluno para enviar emails');
+      return;
+    }
+
+    setAutoSending(true);
+    const newLog = [];
+
+    for (const student of studentsToSend) {
+      const emailData = generateAutomatedEmail(student);
+      if (!emailData) continue;
+
+      try {
+        const to = student.email || student.ee_email;
+        const cc = student.email && student.ee_email && student.email !== student.ee_email 
+          ? student.ee_email 
+          : undefined;
+
+        await EmailService.send({
+          to,
+          cc,
+          subject: emailData.subject,
+          body: emailData.body,
+          pessoa_id: student.id,
+          tipo: 'DEOLUCAO_KIT_2026'
+        });
+
+        newLog.push({
+          aluno: student.nome,
+          turma: student.turma,
+          dataEnvio: new Date().toISOString(),
+          status: 'enviado',
+          email: to
+        });
+      } catch (error) {
+        newLog.push({
+          aluno: student.nome,
+          turma: student.turma,
+          dataEnvio: new Date().toISOString(),
+          status: 'erro',
+          email: student.email || student.ee_email,
+          erro: error.message
+        });
+      }
+    }
+
+    setAutoLog(prev => [...newLog, ...prev]);
+    setAutoSending(false);
+    qc.invalidateQueries({ queryKey: ['email-historico'] });
+    
+    const successCount = newLog.filter(l => l.status === 'enviado').length;
+    const errorCount = newLog.filter(l => l.status === 'erro').length;
+    toast.success(`Envio concluído! ${successCount} enviados, ${errorCount} erros`);
   };
 
   // --- Send Emails Mutation ---
@@ -326,8 +492,9 @@ export default function NotificacoesDevolucao() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid grid-cols-3">
+        <TabsList className="grid grid-cols-4">
           <TabsTrigger value="enviar">Enviar Notificações</TabsTrigger>
+          <TabsTrigger value="automatico">Envio Automático Kit</TabsTrigger>
           <TabsTrigger value="historico">Histórico</TabsTrigger>
           <TabsTrigger value="preview">Pré-visualizar</TabsTrigger>
         </TabsList>
@@ -465,19 +632,25 @@ export default function NotificacoesDevolucao() {
                     <input 
                       type="checkbox" 
                       checked={selectedLoans.length === processedData.length && processedData.length > 0} 
-                      onChange={toggleSelectAll}
+                      onChange={() => {
+                        if (selectedLoans.length === processedData.length) {
+                          setSelectedLoans([]);
+                        } else {
+                          setSelectedLoans(processedData.map(d => d.id));
+                        }
+                      }}
                       className="rounded border-gray-300"
                     />
                   </TableHead>
-                  <TableHead className="cursor-pointer" onClick={() => handleSort('pessoa_nome')}>
+                  <TableHead className="cursor-pointer" onClick={() => setSortConfig({ key: 'pessoa_nome', direction: sortConfig.key === 'pessoa_nome' && sortConfig.direction === 'asc' ? 'desc' : 'asc' })}>
                     Pessoa {sortConfig.key === 'pessoa_nome' && (sortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3 inline" /> : <ArrowDown className="w-3 h-3 inline" />)}
                   </TableHead>
                   <TableHead>Turma/Tipo</TableHead>
-                  <TableHead className="cursor-pointer" onClick={() => handleSort('eqLabel')}>
+                  <TableHead className="cursor-pointer" onClick={() => setSortConfig({ key: 'eqLabel', direction: sortConfig.key === 'eqLabel' && sortConfig.direction === 'asc' ? 'desc' : 'asc' })}>
                     Equipamento {sortConfig.key === 'eqLabel' && (sortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3 inline" /> : <ArrowDown className="w-3 h-3 inline" />)}
                   </TableHead>
                   <TableHead>S/N / Imob</TableHead>
-                  <TableHead className="cursor-pointer" onClick={() => handleSort('data_emprestimo')}>
+                  <TableHead className="cursor-pointer" onClick={() => setSortConfig({ key: 'data_emprestimo', direction: sortConfig.key === 'data_emprestimo' && sortConfig.direction === 'asc' ? 'desc' : 'asc' })}>
                     Data {sortConfig.key === 'data_emprestimo' && (sortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3 inline" /> : <ArrowDown className="w-3 h-3 inline" />)}
                   </TableHead>
                   <TableHead>Estado</TableHead>
@@ -542,6 +715,190 @@ export default function NotificacoesDevolucao() {
               </TableBody>
             </Table>
           </div>
+        </TabsContent>
+
+        {/* --- TAB: ENVIO AUTOMÁTICO KIT --- */}
+        <TabsContent value="automatico" className="mt-6 space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm font-bold">Calendário de Devoluções</CardTitle>
+              <CardDescription>Visualize as datas programadas para cada turma</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {SCHEDULE.map((entry, idx) => {
+                  const isSelected = autoSelectedTurmas.some(t => entry.turmas.includes(t));
+                  return (
+                    <Card 
+                      key={idx} 
+                      className={`cursor-pointer transition-all hover:shadow-md ${isSelected ? 'border-primary bg-primary/5' : ''}`}
+                      onClick={() => {
+                        // Toggle all turmas in this entry
+                        const allTurmasSelected = entry.turmas.every(t => autoSelectedTurmas.includes(t));
+                        if (allTurmasSelected) {
+                          setAutoSelectedTurmas(prev => prev.filter(t => !entry.turmas.includes(t)));
+                        } else {
+                          setAutoSelectedTurmas(prev => [...prev, ...entry.turmas.filter(t => !prev.includes(t))]);
+                        }
+                      }}
+                    >
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <div className="text-lg font-bold">{format(parseISO(entry.date), 'dd/MM/yyyy')}</div>
+                            <div className="text-sm text-muted-foreground">{entry.day}</div>
+                            <div className="mt-2 text-xs text-muted-foreground">{entry.location}, {entry.time}</div>
+                          </div>
+                          <Checkbox 
+                            checked={isSelected} 
+                            onCheckedChange={() => {
+                              const allTurmasSelected = entry.turmas.every(t => autoSelectedTurmas.includes(t));
+                              if (allTurmasSelected) {
+                                setAutoSelectedTurmas(prev => prev.filter(t => !entry.turmas.includes(t)));
+                              } else {
+                                setAutoSelectedTurmas(prev => [...prev, ...entry.turmas.filter(t => !prev.includes(t))]);
+                              }
+                            }}
+                          />
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-1">
+                          {entry.turmas.map(turma => (
+                            <Badge key={turma} variant={autoSelectedTurmas.includes(turma) ? 'default' : 'outline'} className="text-xs">
+                              {turma}
+                            </Badge>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-sm font-bold">Alunos para Envio</CardTitle>
+                <CardDescription>
+                  Selecione os alunos que receberão emails de notificação
+                </CardDescription>
+              </div>
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={selectAllStudentsInSelectedTurmas}
+                  disabled={autoSelectedTurmas.length === 0}
+                >
+                  <Users className="w-4 h-4 mr-2" />
+                  Selecionar Todos na Turma
+                </Button>
+                <Button 
+                  onClick={sendAutomatedEmails}
+                  disabled={autoSelectedStudents.length === 0 || autoSending}
+                >
+                  {autoSending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
+                  Enviar Emails ({autoSelectedStudents.length})
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {autoLog.length > 0 && (
+                <div className="mb-6 p-4 bg-muted rounded-lg border">
+                  <div className="text-sm font-semibold mb-2">Log de Envios</div>
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                    {autoLog.map((log, idx) => (
+                      <div key={idx} className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2">
+                          {log.status === 'enviado' ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : <XCircle className="w-4 h-4 text-red-500" />}
+                          <span className="font-medium">{log.aluno}</span>
+                          <span className="text-muted-foreground">({log.turma})</span>
+                        </div>
+                        <span className="text-muted-foreground">
+                          {format(parseISO(log.dataEnvio), 'HH:mm:ss')}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="rounded-xl border overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/50">
+                      <TableHead className="w-10">
+                        <Checkbox 
+                          checked={autoSelectedTurmas.length > 0 && automatedStudentsData.filter(s => autoSelectedTurmas.includes(s.turma)).every(s => autoSelectedStudents.includes(s.id))}
+                          onCheckedChange={() => {
+                            const turmaStudents = automatedStudentsData.filter(s => autoSelectedTurmas.includes(s.turma)).map(s => s.id);
+                            if (autoSelectedStudents.length === turmaStudents.length && turmaStudents.length > 0) {
+                              setAutoSelectedStudents([]);
+                            } else {
+                              setAutoSelectedStudents(turmaStudents);
+                            }
+                          }}
+                        />
+                      </TableHead>
+                      <TableHead>Nome</TableHead>
+                      <TableHead>Turma</TableHead>
+                      <TableHead>Data de Entrega</TableHead>
+                      <TableHead>Emails</TableHead>
+                      <TableHead className="text-right">Ação</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {automatedStudentsData
+                      .filter(s => autoSelectedTurmas.length === 0 || autoSelectedTurmas.includes(s.turma))
+                      .map(student => {
+                        const isSelected = autoSelectedStudents.includes(student.id);
+                        return (
+                          <TableRow key={student.id} className={isSelected ? 'bg-primary/5' : 'hover:bg-muted/30'}>
+                            <TableCell>
+                              <Checkbox 
+                                checked={isSelected} 
+                                onCheckedChange={() => toggleStudentSelection(student.id)}
+                              />
+                            </TableCell>
+                            <TableCell className="font-medium">{student.nome}</TableCell>
+                            <TableCell><Badge variant="outline">{student.turma}</Badge></TableCell>
+                            <TableCell>
+                              {student.schedule && (
+                                <div className="flex items-center gap-2">
+                                  <Calendar className="w-4 h-4 text-muted-foreground" />
+                                  <span>
+                                    {format(parseISO(student.schedule.date), 'dd/MM/yyyy')}
+                                  </span>
+                                </div>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-col gap-1">
+                                {student.email && <Badge variant="secondary" className="text-xs">Aluno</Badge>}
+                                {student.ee_email && <Badge variant="outline" className="text-xs">EE</Badge>}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                onClick={() => {
+                                  setAutoPreviewStudent(student);
+                                  setAutoPreviewDialog(true);
+                                }}
+                              >
+                                <Eye className="w-4 h-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* --- TAB: HISTÓRICO --- */}
@@ -637,7 +994,7 @@ export default function NotificacoesDevolucao() {
 
               {!preview ? (
                 <div className="text-center py-8 text-muted-foreground">
-                  Template "SOLICITAR_DEVOLUCAO" não encontrado. Vá a Configurações &gt; Templates Email.
+                  Template "SOLICITAR_DEVOLUCAO" não encontrado. Vá a Configurações > Templates Email.
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -704,6 +1061,50 @@ export default function NotificacoesDevolucao() {
                 />
               </div>
             </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog to preview automated email */}
+      <Dialog open={autoPreviewDialog} onOpenChange={(open) => !open && setAutoPreviewDialog(false)}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Pré-visualização do Email</DialogTitle>
+            <DialogDescription>
+              Email para {autoPreviewStudent?.nome}
+            </DialogDescription>
+          </DialogHeader>
+          {autoPreviewStudent && (
+            (() => {
+              const emailData = generateAutomatedEmail(autoPreviewStudent);
+              if (!emailData) return null;
+              return (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-xs font-bold">Para:</Label>
+                      <p className="text-sm">{autoPreviewStudent.email || autoPreviewStudent.ee_email}</p>
+                    </div>
+                    {autoPreviewStudent.email && autoPreviewStudent.ee_email && (
+                      <div>
+                        <Label className="text-xs font-bold">CC:</Label>
+                        <p className="text-sm">{autoPreviewStudent.ee_email}</p>
+                      </div>
+                    )}
+                    <div className="md:col-span-2">
+                      <Label className="text-xs font-bold">Assunto:</Label>
+                      <p className="text-sm font-medium">{emailData.subject}</p>
+                    </div>
+                  </div>
+                  <div className="border rounded-lg overflow-hidden">
+                    <div 
+                      className="p-6 bg-white prose prose-sm max-w-none"
+                      dangerouslySetInnerHTML={{ __html: emailData.body }}
+                    />
+                  </div>
+                </div>
+              );
+            })()
           )}
         </DialogContent>
       </Dialog>
