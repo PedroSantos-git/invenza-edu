@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Monitor, Users, UserCog, ArrowRightLeft,
-  CornerDownLeft, AlertTriangle, Menu, X, LogOut, ChevronLeft, Settings, ClipboardList, FileSpreadsheet, BookOpen, Warehouse
+  CornerDownLeft, AlertTriangle, Menu, X, LogOut, ChevronLeft, Settings, ClipboardList, FileSpreadsheet, BookOpen, Warehouse, Mail
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -19,6 +19,7 @@ const navItems = [
   { path: '/listas', label: 'Listas', icon: FileSpreadsheet },
   { path: '/emprestimos', label: 'Empréstimos', icon: ArrowRightLeft },
   { path: '/devolucoes', label: 'Devoluções', icon: CornerDownLeft },
+  { path: '/notificacoes-devolucao', label: 'Notificações', icon: Mail },
   { path: '/avarias', label: 'Avarias', icon: AlertTriangle },
 ];
 

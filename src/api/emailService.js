@@ -123,14 +123,28 @@ export const EmailService = {
 
   replaceVars(text, vars = {}) {
     let result = text || '';
+    
+    // Handle simple {{#if var}}...{{/if}} blocks
+    result = result.replace(/{{#if\s+(\w+)}}([\s\S]*?){{\/if}}/g, (match, varName, content) => {
+      const value = vars[varName];
+      if (value && value !== '' && value !== null && value !== undefined) {
+        return content;
+      }
+      return '';
+    });
+    
+    // Replace the variables
     Object.entries(vars).forEach(([key, value]) => {
       const regex = new RegExp(`{{${key}}}`, 'g');
       result = result.replace(regex, value || '');
     });
+    
+    // Clean up any remaining conditionals
     result = result
       .replace(/{{#if[^}]*}}/g, '')
       .replace(/{{\/if}}/g, '')
       .replace(/{{else}}/g, '');
+      
     return result;
   },
 

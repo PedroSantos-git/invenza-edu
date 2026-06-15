@@ -38,7 +38,7 @@ const EMAIL_TEMPLATE_VARS = {
   DEVOLUCAO_INFO: ['{{pessoa}}', '{{info_adicional}}', '{{horario}}'],
   DEVOLUCAO_AGENDADA: ['{{pessoa}}', '{{data_agendamento}}', '{{horario}}'],
   DEVOLUCAO_REJEITADA: ['{{pessoa}}', '{{motivo_rejeicao}}', '{{horario}}'],
-  SOLICITAR_DEVOLUCAO: ['{{pessoa}}', '{{equipamento}}', '{{motivo}}', '{{horario}}'],
+  SOLICITAR_DEVOLUCAO: ['{{pessoa}}', '{{equipamento}}', '{{motivo}}', '{{data_entrega}}', '{{horario}}'],
   GERAL: ['{{pessoa}}', '{{corpo}}', '{{horario}}'],
 };
 
@@ -529,6 +529,9 @@ export default function Configuracoes() {
               <strong>{{equipamento}}</strong>
             </div>
             <p><strong>Motivo:</strong> {{motivo}}</p>
+            {{#if data_entrega}}
+            <p><strong>Data sugerida para entrega:</strong> {{data_entrega}}</p>
+            {{/if}}
             <p>Agradecemos que proceda à entrega do(s) mesmo(s) com a maior brevidade possível.</p>
             <p>Obrigado pela compreensão.</p>
           </div>
