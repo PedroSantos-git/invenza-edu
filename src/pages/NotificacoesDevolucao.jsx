@@ -201,30 +201,48 @@ export default function NotificacoesDevolucao() {
 
   // --- Process Data for Automated Tab ---
   const automatedStudentsData = useMemo(() => {
-    if (!pessoas.length) return [];
+    if (!pessoas.length || !emprestimos.length || !equipamentos.length) return [];
     
-    // Get students from the scheduled turmas
+    // Get students from the scheduled turmas with active loans
     const allTurmas = SCHEDULE.flatMap(s => s.turmas);
-    const students = pessoas.filter(p => {
+    const activeLoans = emprestimos.filter(e => e.estado === 'ATIVO');
+    const studentsWithLoans = pessoas.filter(p => {
       if (p.tipo !== 'Aluno' || !(p.email || p.ee_email)) return false;
       const normalized = normalizeTurma(p.turma);
-      return allTurmas.includes(normalized);
+      if (!allTurmas.includes(normalized)) return false;
+      // Check if student has active loans
+      return activeLoans.some(l => l.pessoa_id === p.id);
     });
 
-    // Group by schedule entry
-    return students.map(student => {
+    // Map students with their loans and equipment
+    return studentsWithLoans.map(student => {
       const normalizedTurma = normalizeTurma(student.turma);
       const scheduleEntry = SCHEDULE.find(s => s.turmas.includes(normalizedTurma));
+      
+      // Get all active loans and equipment for this student
+      const studentLoans = activeLoans.filter(l => l.pessoa_id === student.id);
+      const studentEquipamentos = studentLoans.map(loan => {
+        const eq = equipamentos.find(e => e.id === loan.equipamento_id);
+        return {
+          ...loan,
+          equipamento: eq,
+          eqLabel: eq ? `${eq.tipo} ${eq.marca} ${eq.modelo}`.trim() : loan.equipamento_info,
+          eqSn: eq?.numero_serie || loan.equipamento_sn,
+          eqImob: eq?.numero_imobilizado
+        };
+      });
+      
       return {
         ...student,
         turma: normalizedTurma, // Use normalized turma
         schedule: scheduleEntry,
+        equipamentos: studentEquipamentos,
         hasEmail: !!(student.email || student.ee_email),
         hasAlunoEmail: !!student.email,
         hasEeEmail: !!student.ee_email
       };
     }).sort((a, b) => (a.turma || '').localeCompare(b.turma || ''));
-  }, [pessoas]);
+  }, [pessoas, emprestimos, equipamentos]);
 
   // --- Helper Functions for Automated Emails ---
   const getTurmasWithSchedule = () => {
@@ -269,6 +287,11 @@ export default function NotificacoesDevolucao() {
 
     const subject = `Devolução do Kit Informático – ${student.nome} – Turma ${student.turma} – ${formattedDate}`;
 
+    // Build equipment list from student's active loans
+    const equipmentListItems = student.equipamentos
+      .map(eq => `<li>${eq.eqLabel}${eq.eqSn ? ` (Nº Série: ${eq.eqSn})` : ''}${eq.eqImob ? ` (Nº Imobilizado: ${eq.eqImob})` : ''}</li>`)
+      .join('\n');
+
     const body = `
       <div style="font-family: sans-serif; line-height: 1.6; color: #333;">
         <p>Exmo(a). Encarregado(a) de Educação,</p>
@@ -278,11 +301,7 @@ export default function NotificacoesDevolucao() {
         <br />
         <p>Deverão ser entregues os seguintes equipamentos:</p>
         <ul>
-          <li>Computador</li>
-          <li>Transformador</li>
-          <li>Mochila</li>
-          <li>Cartão SIM (se aplicável)</li>
-          <li>Router + cabo de alimentação + carregador (se aplicável)</li>
+          ${equipmentListItems}
         </ul>
         <br />
         <p><strong>ATENÇÃO:</strong></p>
@@ -895,7 +914,10 @@ export default function NotificacoesDevolucao() {
                             </TableCell>
                             <TableCell>
                               <div className="flex flex-col gap-1">
-                                {student.email && <Badge variant="secondary" className="text-xs">Aluno</Badge>}
+                                <Badge variant="secondary" className="text-xs">
+                                  {student.equipamentos.length} equipamento{student.equipamentos.length !== 1 ? 's' : ''}
+                                </Badge>
+                                {student.email && <Badge variant="outline" className="text-xs">Aluno</Badge>}
                                 {student.ee_email && <Badge variant="outline" className="text-xs">EE</Badge>}
                               </div>
                             </TableCell>

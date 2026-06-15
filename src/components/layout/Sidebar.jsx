@@ -148,7 +148,7 @@ export default function Sidebar({ user, collapsed, setCollapsed, onOpenManual })
           className="absolute top-5 -right-3 w-6 h-6 rounded-full bg-card border shadow-sm flex items-center justify-center hover:bg-accent transition-colors"
         >
           <ChevronLeft className={cn("w-3 h-3 transition-transform", collapsed && "rotate-180")} />
-        </button>
+        </button>no email 
       </div>
     </>
   );
