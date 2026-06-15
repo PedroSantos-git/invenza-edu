@@ -20,6 +20,24 @@ import { format, parseISO, isSameDay, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
 
+// --- Utility Functions ---
+const normalizeTurma = (turma) => {
+  if (!turma) return turma;
+  
+  // Remove any spaces, replace ".º" with "º", and strip "Ano"
+  let normalized = turma.replace(/\s+/g, '');
+  normalized = normalized.replace(/\.º/g, 'º');
+  normalized = normalized.replace(/[Aa]no/g, '');
+  
+  // Ensure it's in the format "XºY"
+  const match = normalized.match(/^(\d+)([ºo])([A-Za-z])$/i);
+  if (match) {
+    return `${match[1]}º${match[3].toUpperCase()}`;
+  }
+  
+  return normalized;
+};
+
 // --- Schedule Configuration ---
 const SCHEDULE = [
   // 9th Grade
@@ -116,7 +134,7 @@ export default function NotificacoesDevolucao() {
         eqImob,
         pessoa_nome: pessoa?.nome || emp.pessoa_info,
         pessoa_nif: pessoa?.nif || emp.pessoa_nif,
-        pessoa_turma: pessoa?.turma || '—',
+        pessoa_turma: pessoa?.turma ? normalizeTurma(pessoa.turma) : '—',
         pessoa_tipo: pessoa?.tipo || '—',
         pessoa_ativo: pessoa?.ativo ?? true,
         pessoa_processo: pessoa?.n_processo || '—',
@@ -139,7 +157,7 @@ export default function NotificacoesDevolucao() {
       if (emailFilter === 'com_email_externo' && !hasExternalEmail) return false;
 
       if (tipoPessoaFilter !== 'todos' && item.pessoa_tipo !== tipoPessoaFilter) return false;
-      if (turmaFilter !== 'todos' && item.pessoa_turma !== turmaFilter) return false;
+            if (turmaFilter !== 'todos' && item.pessoa_turma !== normalizeTurma(turmaFilter)) return false;
 
       if (searchPessoa) {
         const s = searchPessoa.toLowerCase();
@@ -187,17 +205,19 @@ export default function NotificacoesDevolucao() {
     
     // Get students from the scheduled turmas
     const allTurmas = SCHEDULE.flatMap(s => s.turmas);
-    const students = pessoas.filter(p => 
-      p.tipo === 'Aluno' && 
-      allTurmas.includes(p.turma) &&
-      (p.email || p.ee_email)
-    );
+    const students = pessoas.filter(p => {
+      if (p.tipo !== 'Aluno' || !(p.email || p.ee_email)) return false;
+      const normalized = normalizeTurma(p.turma);
+      return allTurmas.includes(normalized);
+    });
 
     // Group by schedule entry
     return students.map(student => {
-      const scheduleEntry = SCHEDULE.find(s => s.turmas.includes(student.turma));
+      const normalizedTurma = normalizeTurma(student.turma);
+      const scheduleEntry = SCHEDULE.find(s => s.turmas.includes(normalizedTurma));
       return {
         ...student,
+        turma: normalizedTurma, // Use normalized turma
         schedule: scheduleEntry,
         hasEmail: !!(student.email || student.ee_email),
         hasAlunoEmail: !!student.email,
