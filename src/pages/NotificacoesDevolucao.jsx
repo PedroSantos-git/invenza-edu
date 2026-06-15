@@ -299,9 +299,18 @@ export default function NotificacoesDevolucao() {
         <br />
         <p>Informamos que a devolução do Kit Informático para os alunos da turma ${student.turma} está agendada para o dia ${formattedDate} (${schedule.day}), entre as ${schedule.time}, na ${schedule.location}.</p>
         <br />
-        <p>Deverão ser entregues os seguintes equipamentos:</p>
+        <p><strong>Equipamento(s) registados em seu nome:</strong></p>
         <ul>
           ${equipmentListItems}
+        </ul>
+        <br />
+        <p>Deverão ser entregues os seguintes equipamentos:</p>
+        <ul>
+          <li>Computador</li>
+          <li>Transformador</li>
+          <li>Mochila</li>
+          <li>Cartão SIM (se aplicável)</li>
+          <li>Router + cabo de alimentação + carregador (se aplicável)</li>
         </ul>
         <br />
         <p><strong>ATENÇÃO:</strong></p>
