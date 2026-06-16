@@ -178,22 +178,22 @@ export default function Avarias() {
       
       const kit = kits.get(imob);
       kit.all.push(av);
-
-      // Tentar encontrar a avaria do PC como principal
-      const eq = equipamentoById.get(av.equipamento_id);
-      if (isMainEquipment(eq)) {
-        kit.main = av;
-      }
     });
 
     const groupedKits = Array.from(kits.values()).map(kit => {
-      const main = kit.main || kit.all[0];
+      // Ordenar kit.all por mais recente primeiro
+      const allSorted = [...kit.all].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      
+      // Encontrar a avaria mais recente que é principal (ou a mais recente se nenhuma for principal)
+      let main = allSorted.find(av => isMainEquipment(equipamentoById.get(av.equipamento_id)));
+      if (!main) main = allSorted[0];
+      
       return {
         ...main,
         isKitAvaria: true,
         kitAvariaData: {
-          count: kit.all.length,
-          siblings: kit.all.filter(a => a.id !== main.id)
+          count: allSorted.length,
+          siblings: allSorted.filter(a => a.id !== main.id)
         }
       };
     });
