@@ -44,6 +44,13 @@ export default function AvariaDetail({ open, onClose, avaria }) {
   const [showEquipDetail, setShowEquipDetail] = useState(false);
   const [selectedDoc, setSelectedDoc] = useState(null);
 
+  // Buscar equipamento atual
+  const { data: equipamentoAtual } = useQuery({
+    queryKey: ['equipamento', avaria.equipamento_id],
+    queryFn: () => db.entities.Equipamento.get(avaria.equipamento_id),
+    enabled: !!avaria.equipamento_id && open
+  });
+
   // Buscar equipamentos do conjunto
   const { data: kitData, isLoading: loadingKit } = useQuery({
     queryKey: ['equipamento-kit', avaria.equipamento_id],
@@ -385,11 +392,11 @@ export default function AvariaDetail({ open, onClose, avaria }) {
       />
 
       {/* Equipment history dialog */}
-      {showEquipDetail && avaria.equipamento_id && (
+      {showEquipDetail && equipamentoAtual && (
         <EquipamentoDetail
           open={showEquipDetail}
           onClose={() => setShowEquipDetail(false)}
-          equipamento={{ id: avaria.equipamento_id, designacao: avaria.equipamento_info, estado: '' }}
+          equipamento={equipamentoAtual}
           onEdit={() => setShowEquipDetail(false)}
           isAdmin={isAdmin}
         />
